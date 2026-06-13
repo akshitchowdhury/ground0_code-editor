@@ -141,7 +141,7 @@ export default function NetworkScene() {
           GROUND&nbsp;ZER<span className="zero-neon">0</span>
         </h1>
         <p className="relative max-w-xs text-sm leading-relaxed text-zinc-400">
-          Architect cloud systems, simulate the network flow, and learn how the internet really works.
+          Your very own architectural design studio + Code sandbox.
         </p>
       </div>
     </div>

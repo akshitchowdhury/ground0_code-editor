@@ -101,7 +101,7 @@ export function buildSimulation({ nodes = [], edges = [] }, { targetId } = {}) {
     // Security-group check: does the destination accept this port?
     // Internet/edge managed services accept anything; everything else must
     // list the port in its security group.
-    const managed = ['internet', 'edge', 'dns', 'cdn', 'waf'].includes(to.kind)
+    const managed = ['internet', 'edge', 'dns', 'cdn', 'waf', 'client'].includes(to.kind)
     const allowsPort = managed || (to.ports || []).includes(port)
 
     let verdict = 'ok'
@@ -113,7 +113,7 @@ export function buildSimulation({ nodes = [], edges = [] }, { targetId } = {}) {
     } else if (STATEFUL_KINDS.includes(to.kind) && (isInternet(from) || PUBLIC_ENTRY_KINDS.includes(from.kind))) {
       verdict = 'insecure'
       note = `Reaches ${to.name}, but data tiers should sit behind the app tier — not directly behind ${from.name}.`
-    } else if (to.openToInternet && !['internet', 'edge', 'dns', 'cdn', 'waf', 'lb', 'gateway'].includes(to.kind)) {
+    } else if (to.openToInternet && !['internet', 'edge', 'dns', 'cdn', 'waf', 'lb', 'gateway', 'client'].includes(to.kind)) {
       verdict = 'insecure'
       note = `Reaches ${to.name} on :${port}, but its security group is open to 0.0.0.0/0 — tighten it.`
     }
@@ -122,6 +122,29 @@ export function buildSimulation({ nodes = [], edges = [] }, { targetId } = {}) {
     if (verdict === 'blocked') {
       blockedAt = steps.length - 1
       break
+    }
+  }
+
+  // Response travels back along the same path to the user (green = response),
+  // completing the full request → response cycle.
+  if (blockedAt === null) {
+    for (let i = path.length - 1; i >= 0; i--) {
+      const e = path[i]
+      const src = byId[e.to] // the response originates from the deeper tier
+      const dst = byId[e.from]
+      const last = i === 0
+      steps.push({
+        edge: e,
+        from: src.id,
+        to: dst.id,
+        port: e.port,
+        verdict: 'ok',
+        color: 'rgb(74 222 128)', // green for the response leg
+        note: last
+          ? `${src.name} sends the response back to ${dst.name}. 200 OK — the user has their answer. Full request → response cycle complete. ✓`
+          : `${src.name} returns its result up to ${dst.name}.`,
+        packet: last ? '200 OK ◀' : 'response ◀',
+      })
     }
   }
 
@@ -137,5 +160,5 @@ export function buildSimulation({ nodes = [], edges = [] }, { targetId } = {}) {
 
 // Data-tier endpoints the user can choose as a simulation target.
 export function simulationTargets(nodes) {
-  return nodes.filter((n) => !isInternet(n) && n.kind !== 'edge' && n.kind !== 'waf')
+  return nodes.filter((n) => !isInternet(n) && n.kind !== 'edge' && n.kind !== 'waf' && n.kind !== 'client')
 }

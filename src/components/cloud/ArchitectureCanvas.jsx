@@ -121,11 +121,12 @@ export default function ArchitectureCanvas({
     }
   }
   // Stage colour wins for normal flow; amber/red verdicts override it.
-  const packetColor = packet
-    ? packet.verdict === 'ok'
+  // (Fallback to cyan so an unexpected verdict can never yield undefined.)
+  const packetColor = !packet
+    ? null
+    : packet.verdict === 'ok'
       ? packet.color || VERDICT_COLOR.ok
-      : packetColor
-    : null
+      : VERDICT_COLOR[packet.verdict] || VERDICT_COLOR.ok
   const activeNodeIds = curStep ? new Set([curStep.from, curStep.to]) : new Set()
   const blockedHere =
     curStep && curStep.verdict === 'blocked' && sim.progress >= 0.8 ? byId[curStep.to] : null
@@ -260,8 +261,14 @@ export default function ArchitectureCanvas({
         const isPending = pendingSourceId === n.id
         const isActive = activeNodeIds.has(n.id)
         const isHi = highlightIds?.has(n.id)
+        // Load-test overlay: colour the tier by how loaded it is.
+        const load = sim?.nodeStatus?.[n.id]
         let ring = 'border-zinc-700'
         if (isActive) ring = 'border-cyan-400 shadow-lg shadow-cyan-500/20'
+        else if (load) ring =
+          load.level === 'over' ? 'border-rose-500 shadow-lg shadow-rose-500/30'
+            : load.level === 'warn' ? 'border-amber-400 shadow-md shadow-amber-500/20'
+              : 'border-emerald-500/70'
         else if (isPending) ring = 'border-cyan-400 border-dashed'
         else if (isSel) ring = 'border-indigo-400'
         else if (isHi) ring = 'border-rose-400 shadow-lg shadow-rose-500/20'
@@ -274,6 +281,15 @@ export default function ArchitectureCanvas({
             }`}
             style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H }}
           >
+            {load && n.kind !== 'internet' && (
+              <span
+                className={`absolute -right-1.5 -top-1.5 rounded-full px-1 text-[8px] font-bold ${
+                  load.level === 'over' ? 'bg-rose-500 text-white' : load.level === 'warn' ? 'bg-amber-400 text-zinc-900' : 'bg-emerald-500 text-zinc-900'
+                }`}
+              >
+                {load.scalable ? '∞' : `${load.util}%`}
+              </span>
+            )}
             <div className="flex items-center gap-1.5">
               <span className="text-base leading-none">{n.icon}</span>
               <span className="truncate text-[12px] font-semibold text-white">{n.label || n.name}</span>

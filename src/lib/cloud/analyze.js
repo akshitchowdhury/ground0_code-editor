@@ -138,6 +138,21 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
     }
   }
 
+  // 4b. Frontend/client talking straight to a data tier (no backend between).
+  for (const n of nodes) {
+    if (!isStateful(n)) continue
+    const fromClient = graph.inc[n.id].some((src) => byId[src]?.kind === 'client')
+    if (fromClient) {
+      add(
+        'high',
+        'security',
+        `${n.name} is queried directly by the frontend`,
+        `A client / frontend is wired straight to ${n.name}. Put a backend / API tier in between — clients must never hold database credentials or hit the database directly.`,
+        [n.id],
+      )
+    }
+  }
+
   // 5. No WAF in front of a public entry point.
   const publicEntries = nodes.filter((n) => PUBLIC_ENTRY_KINDS.includes(n.kind) && reachable.has(n.id))
   const hasWaf = nodes.some((n) => n.kind === 'waf')

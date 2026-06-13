@@ -2,17 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Play, Pause, RotateCcw, Gauge, Cable, Trash2, Layers, X,
-  Sparkles, ChevronDown, FolderOpen, Plus, Copy, Pencil, ShieldCheck, Zap, DollarSign,
+  Sparkles, ChevronDown, FolderOpen, Plus, Copy, Pencil, ShieldCheck, Zap, DollarSign, ArrowLeftRight,
 } from 'lucide-react'
 import ArchitectureCanvas from '../components/cloud/ArchitectureCanvas.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import {
-  Palette, NodeInspector, EdgeInspector, ReviewPanel, CostPanel, LoadTestPanel,
+  Palette, NodeInspector, EdgeInspector, ReviewPanel, CostPanel, LoadTestPanel, ProviderComparison,
 } from '../components/cloud/StudioPanels.jsx'
-import { getComponent } from '../data/cloud/components.js'
+import { getComponent, providerName, CLOUD_PROVIDERS } from '../data/cloud/components.js'
 import { TEMPLATES, getTemplate } from '../data/cloud/templates.js'
 import { analyzeArchitecture } from '../lib/cloud/analyze.js'
 import { buildSimulation, simulationTargets } from '../lib/cloud/simulate.js'
-import { runLoadTest } from '../lib/cloud/loadtest.js'
+import { runLoadTest, buildLoadFlow } from '../lib/cloud/loadtest.js'
 import { estimateCost } from '../lib/cloud/cost.js'
 import { load, save } from '../lib/storage.js'
 
@@ -26,6 +27,8 @@ export default function CloudDesigner() {
   const [activeId, setActiveId] = useState(null)
   const [designsOpen, setDesignsOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
+  const [provider, setProvider] = useState('aws') // aws | azure | gcp
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
@@ -42,6 +45,8 @@ export default function CloudDesigner() {
   const [simIndex, setSimIndex] = useState(0)
   const [simProgress, setSimProgress] = useState(0)
   const [simStatus, setSimStatus] = useState('idle')
+  const [simKind, setSimKind] = useState('flow') // 'flow' | 'load'
+  const [simNodeStatus, setSimNodeStatus] = useState(null) // load-test tier overlay
   const [speed, setSpeed] = useState(1)
   const progressRef = useRef(0)
   const addOffset = useRef(0)
@@ -75,6 +80,7 @@ export default function CloudDesigner() {
     setActiveId(active)
     setNodes(map[active].nodes)
     setEdges(map[active].edges)
+    setProvider(map[active].provider || 'aws')
   }, [])
 
   // ── autosave the active design ──
@@ -82,12 +88,12 @@ export default function CloudDesigner() {
     if (!activeId) return
     setDesigns((prev) => {
       if (!prev[activeId]) return prev
-      const next = { ...prev, [activeId]: { ...prev[activeId], nodes, edges, updatedAt: Date.now() } }
+      const next = { ...prev, [activeId]: { ...prev[activeId], nodes, edges, provider, updatedAt: Date.now() } }
       save('cloudDesigns', next)
       return next
     })
     save('cloudActiveDesign', activeId)
-  }, [nodes, edges, activeId])
+  }, [nodes, edges, activeId, provider])
 
   const analysis = useMemo(() => analyzeArchitecture({ nodes, edges }), [nodes, edges])
   const targets = useMemo(() => simulationTargets(nodes), [nodes])
@@ -104,22 +110,32 @@ export default function CloudDesigner() {
   }, [highlightFinding, analysis])
 
   function resetSim() {
-    setSimStatus('idle'); setSimSteps([]); setSimIndex(0); setSimProgress(0); progressRef.current = 0; setSimMeta(null)
+    setSimStatus('idle'); setSimSteps([]); setSimIndex(0); setSimProgress(0); progressRef.current = 0; setSimMeta(null); setSimNodeStatus(null)
   }
   function resetLoad() {
     setLoadResult(null); setCostMode('provisioned')
   }
 
+  // Re-label every node for a provider (keeps kind/config/ports/user labels).
+  const reskin = (ns, p) => ns.map((n) => ({ ...n, provider: p, name: providerName(n.type, p) || n.name }))
+
+  function switchProvider(p) {
+    if (p === provider) return
+    resetSim(); resetLoad(); setSelected(null)
+    setProvider(p)
+    setNodes((ns) => reskin(ns, p))
+  }
+
   // ── topology mutations ──
   function addComponent(componentId, x, y) {
-    const c = getComponent(componentId)
+    const c = getComponent(componentId, provider)
     if (!c) return
     if (x === undefined) {
       const k = addOffset.current++ % 8
       x = 320 + k * 26; y = 200 + k * 26
     }
     const node = {
-      id: uid(), type: c.id, kind: c.kind, name: c.name, icon: c.icon, x, y,
+      id: uid(), type: c.id, kind: c.kind, name: c.name, icon: c.icon, x, y, provider,
       tier: c.defaultTier, ports: [...(c.defaultPorts || [])], openToInternet: !!c.defaultOpenToInternet,
       config: { ...(c.config || {}) },
     }
@@ -176,14 +192,14 @@ export default function CloudDesigner() {
   function loadTemplate(id) {
     const t = getTemplate(id); if (!t) return
     const { nodes: n, edges: e } = t.build()
-    resetSim(); resetLoad(); setNodes(n); setEdges(e); setSelected(null); setSimTarget(''); setTplOpen(false)
+    resetSim(); resetLoad(); setNodes(reskin(n, provider)); setEdges(e); setSelected(null); setSimTarget(''); setTplOpen(false)
   }
 
   // ── named designs ──
   function switchDesign(id) {
     if (!designs[id] || id === activeId) { setDesignsOpen(false); return }
     resetSim(); resetLoad(); setSelected(null); setPendingSource(null); setConnectMode(false)
-    setActiveId(id); setNodes(designs[id].nodes); setEdges(designs[id].edges); setDesignsOpen(false)
+    setActiveId(id); setNodes(designs[id].nodes); setEdges(designs[id].edges); setProvider(designs[id].provider || 'aws'); setDesignsOpen(false)
   }
   function newDesign() {
     const id = uid()
@@ -222,8 +238,17 @@ export default function CloudDesigner() {
   // ── packet-flow simulation ──
   function play() {
     const result = buildSimulation({ nodes, edges }, { targetId: simTarget || undefined })
-    if (!result.steps.length) { setSimSteps([]); setSimMeta({ ok: false, reason: result.reason }); setSimStatus('error'); return }
+    if (!result.steps.length) { setSimSteps([]); setSimMeta({ ok: false, reason: result.reason }); setSimStatus('error'); setSimKind('flow'); setSimNodeStatus(null); return }
+    setSimKind('flow'); setSimNodeStatus(null)
     setSimSteps(result.steps); setSimMeta({ ok: result.ok, targetName: result.targetName, reason: null })
+    setSimIndex(0); progressRef.current = 0; setSimProgress(0); setSimStatus('running'); setSelected(null)
+  }
+  // Play the load test as animated traffic on the design board.
+  function playLoadOnBoard() {
+    const flow = buildLoadFlow({ nodes, edges }, { rps: loadRps })
+    if (!flow.steps.length) { setSimSteps([]); setSimMeta({ ok: false, reason: flow.reason }); setSimStatus('error'); setSimKind('load'); setSimNodeStatus(null); return }
+    setSimKind('load'); setSimNodeStatus(flow.nodeStatus)
+    setSimSteps(flow.steps); setSimMeta({ ok: flow.ok, loadDone: flow.steps[flow.steps.length - 1]?.note, reason: null })
     setSimIndex(0); progressRef.current = 0; setSimProgress(0); setSimStatus('running'); setSelected(null)
   }
   function togglePlay() {
@@ -276,7 +301,9 @@ export default function CloudDesigner() {
   if (simStatus === 'error') simLine = { tone: 'warn', text: simMeta?.reason }
   else if (simActive) {
     const cur = simSteps[simIndex]
-    if (simStatus === 'done') simLine = { tone: 'good', text: `Request reached ${simMeta?.targetName} — every hop was accepted.` }
+    if (simStatus === 'done') simLine = simKind === 'load'
+      ? { tone: 'good', text: simMeta?.loadDone || 'Load test complete — all tiers held up.' }
+      : { tone: 'good', text: `Request reached ${simMeta?.targetName} — every hop was accepted.` }
     else if (simStatus === 'blocked') simLine = { tone: 'bad', text: cur?.note }
     else simLine = { tone: cur?.verdict === 'ok' ? 'info' : cur?.verdict === 'insecure' ? 'warn' : 'bad', text: cur?.note }
   }
@@ -326,8 +353,22 @@ export default function CloudDesigner() {
               </div>
             )}
           </div>
+          {/* Cloud provider tabs */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-zinc-800 bg-zinc-950 p-0.5">
+            {CLOUD_PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => switchProvider(p.id)}
+                title={`Switch the whole design to ${p.tag}`}
+                className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${provider === p.id ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-zinc-200'}`}
+              >
+                <span className={`h-2 w-2 rounded-full ${p.dot}`} /> {p.name}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
+          <button onClick={() => setCompareOpen(true)} className="btn-outline text-xs" title="Compare AWS, Azure & GCP services"><ArrowLeftRight size={13} /> Compare</button>
           <button onClick={toggleConnect} className={`btn text-xs ${connectMode ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40' : 'btn-outline'}`} title="Connect two components">
             <Cable size={14} /> {connectMode ? (pendingSource ? 'Pick target…' : 'Pick source…') : 'Connect'}
           </button>
@@ -353,7 +394,7 @@ export default function CloudDesigner() {
         {/* Palette */}
         <aside className="panel flex w-52 shrink-0 flex-col">
           <div className="panel-header">Components</div>
-          <Palette onAdd={(id) => addComponent(id)} />
+          <Palette onAdd={(id) => addComponent(id)} provider={provider} />
           <p className="border-t border-zinc-800 px-3 py-2 text-[10px] leading-relaxed text-zinc-600">
             Drag onto the canvas, or click to drop. Use <span className="text-zinc-400">Connect</span> to wire components, then <span className="text-zinc-400">Play</span> or run a <span className="text-zinc-400">Load test</span>.
           </p>
@@ -362,13 +403,15 @@ export default function CloudDesigner() {
         {/* Canvas + floating inspector */}
         <div className="panel relative min-w-0 flex-1 overflow-hidden">
           <div className="h-full w-full overflow-auto">
-            <ArchitectureCanvas
-              nodes={nodes} edges={edges} selected={selected} highlightIds={highlightIds}
-              connectMode={connectMode} pendingSourceId={pendingSource}
-              sim={simActive ? { steps: simSteps, index: simIndex, progress: simProgress, status: simStatus } : null}
-              onAddComponent={addComponent} onMoveNode={moveNode}
-              onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick}
-            />
+            <ErrorBoundary label="ArchitectureCanvas">
+              <ArchitectureCanvas
+                nodes={nodes} edges={edges} selected={selected} highlightIds={highlightIds}
+                connectMode={connectMode} pendingSourceId={pendingSource}
+                sim={simActive ? { steps: simSteps, index: simIndex, progress: simProgress, status: simStatus, nodeStatus: simNodeStatus } : null}
+                onAddComponent={addComponent} onMoveNode={moveNode}
+                onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick}
+              />
+            </ErrorBoundary>
           </div>
           {connectMode && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full border border-cyan-500/40 bg-zinc-950/90 px-3 py-1 text-[11px] text-cyan-300 backdrop-blur">
@@ -444,7 +487,7 @@ export default function CloudDesigner() {
               </>
             )}
             {rightTab === 'load' && (
-              <LoadTestPanel rps={loadRps} onRps={setLoadRps} onRun={runLoad} running={loadRunning} result={loadResult} onApplyFix={applyFix} costAtLoad={costAtLoad?.total} />
+              <LoadTestPanel rps={loadRps} onRps={setLoadRps} onRun={runLoad} running={loadRunning} result={loadResult} onApplyFix={applyFix} costAtLoad={costAtLoad?.total} onPlayOnBoard={playLoadOnBoard} />
             )}
             {rightTab === 'cost' && (
               <CostPanel provisioned={costProvisioned} atLoad={costAtLoad} mode={costMode} onMode={setCostMode} loadRps={loadResult?.rps || loadRps} />
@@ -452,6 +495,8 @@ export default function CloudDesigner() {
           </div>
         </aside>
       </div>
+
+      {compareOpen && <ProviderComparison onClose={() => setCompareOpen(false)} />}
     </div>
   )
 }

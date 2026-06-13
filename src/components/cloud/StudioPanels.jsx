@@ -1,11 +1,12 @@
 // Right-hand panels + palette for the Architecture Studio. Kept out of
 // CloudDesigner.jsx so the page stays focused on state/orchestration.
+import { Fragment } from 'react'
 import {
   Plus, Trash2, CircleCheck, CircleX, TriangleAlert, Sparkles, Wrench, TrendingUp,
-  Activity, DollarSign, Zap, Gauge,
+  Activity, DollarSign, Zap, Gauge, X,
 } from 'lucide-react'
 import {
-  CATALOG_CATEGORIES, getComponent, TIERS, COMMON_PORTS,
+  CATALOG_CATEGORIES, getComponent, getCatalogCategories, getProviderComparison, CLOUD_PROVIDERS, TIERS, COMMON_PORTS,
 } from '../../data/cloud/components.js'
 import { CATEGORY_LABELS, FINDING_STYLES } from '../../lib/cloud/analyze.js'
 import {
@@ -48,10 +49,11 @@ function SelectField({ label, value, options, onChange, render = (o) => o }) {
 }
 
 // ───────────────────────── Palette ─────────────────────────
-export function Palette({ onAdd }) {
+export function Palette({ onAdd, provider = 'aws' }) {
+  const categories = getCatalogCategories(provider)
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-      {Object.entries(CATALOG_CATEGORIES).map(([category, items]) => (
+      {Object.entries(categories).map(([category, items]) => (
         <div key={category}>
           <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">{category}</p>
           <div className="space-y-1">
@@ -127,7 +129,7 @@ function ConfigControls({ node, onUpdate }) {
 }
 
 export function NodeInspector({ node, onUpdate, onDelete }) {
-  const comp = getComponent(node.type)
+  const comp = getComponent(node.type, node.provider)
   const togglePort = (p) => {
     const has = node.ports.includes(p)
     onUpdate({ ports: has ? node.ports.filter((x) => x !== p) : [...node.ports, p].sort((a, b) => a - b) })
@@ -299,7 +301,7 @@ function utilColor(u) {
   return u > 1 ? 'bg-rose-500' : u > 0.7 ? 'bg-amber-500' : 'bg-emerald-500'
 }
 
-export function LoadTestPanel({ rps, onRps, onRun, running, result, onApplyFix, costAtLoad }) {
+export function LoadTestPanel({ rps, onRps, onRun, running, result, onApplyFix, costAtLoad, onPlayOnBoard }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-2 border-b border-zinc-800 p-3">
@@ -313,9 +315,16 @@ export function LoadTestPanel({ rps, onRps, onRun, running, result, onApplyFix, 
             </button>
           ))}
         </div>
-        <button onClick={onRun} className="btn-primary w-full justify-center">
-          {running ? <><Activity size={14} className="animate-pulse" /> Simulating…</> : <><Zap size={14} /> Run load test — {fmtRps(rps)} req/s</>}
-        </button>
+        <div className="flex gap-1.5">
+          <button onClick={onRun} className="btn-primary flex-1 justify-center">
+            {running ? <><Activity size={14} className="animate-pulse" /> Simulating…</> : <><Zap size={14} /> Run — {fmtRps(rps)} req/s</>}
+          </button>
+          {onPlayOnBoard && (
+            <button onClick={onPlayOnBoard} className="btn-outline shrink-0 text-xs" title="Watch the traffic flow on the design board">
+              <Activity size={13} /> Play on board
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -387,6 +396,61 @@ export function LoadTestPanel({ rps, onRps, onRun, running, result, onApplyFix, 
             )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── Cross-cloud comparison modal ──
+export function ProviderComparison({ onClose }) {
+  const rows = getProviderComparison()
+  const grouped = rows.reduce((acc, r) => { (acc[r.category] ||= []).push(r); return acc }, {})
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div onClick={(e) => e.stopPropagation()} className="fade-up flex max-h-[88vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-3">
+          <div>
+            <h2 className="text-base font-bold text-white">AWS · Azure · GCP — service equivalents</h2>
+            <p className="text-xs text-zinc-500">The same building block, named differently per cloud — with what makes each one distinct.</p>
+          </div>
+          <button onClick={onClose} className="btn-ghost !p-1.5 text-zinc-400"><X size={16} /></button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
+          <table className="w-full border-collapse text-left">
+            <thead className="sticky top-0 bg-zinc-900">
+              <tr className="text-[10px] uppercase tracking-wider text-zinc-500">
+                <th className="py-2 pr-3">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-orange-400" /> AWS</span>
+                </th>
+                <th className="py-2 pr-3">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-sky-400" /> Azure</span>
+                </th>
+                <th className="py-2 pr-3">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-rose-400" /> GCP</span>
+                </th>
+                <th className="py-2">Notes — cost &amp; features</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(grouped).map(([cat, items]) => (
+                <Fragment key={cat}>
+                  <tr><td colSpan={4} className="pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">{cat}</td></tr>
+                  {items.map((r, i) => (
+                    <tr key={i} className="border-t border-zinc-800/70 align-top">
+                      <td className="py-2 pr-3"><span className="flex items-center gap-1.5 text-xs font-medium text-zinc-100"><span>{r.icon}</span> {r.aws}</span></td>
+                      <td className="py-2 pr-3 text-xs text-zinc-300">{r.azure}</td>
+                      <td className="py-2 pr-3 text-xs text-zinc-300">{r.gcp}</td>
+                      <td className="py-2 text-[11px] leading-relaxed text-zinc-500">{r.note}</td>
+                    </tr>
+                  ))}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="border-t border-zinc-800 px-5 py-2 text-[10px] text-zinc-600">
+          Equivalents are approximate — services differ in features and limits. Pricing notes are directional, not quotes.
+        </p>
       </div>
     </div>
   )

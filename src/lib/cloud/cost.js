@@ -39,6 +39,8 @@ function nodeMonthly(node, rps, instances) {
       return { monthly: reqM * PRICING.apigwPerMillionReq, detail: 'per million requests' }
     case 'cdn':
       return { monthly: reqM * PRICING.cdnPerMillionReq, detail: 'requests + transfer' }
+    case 'client':
+      return { monthly: 10 + reqM * 0.4, detail: 'frontend hosting + requests' }
     case 'waf':
       return { monthly: PRICING.wafMonthly + reqM * PRICING.wafPerMillionReq, detail: 'WAF + requests' }
     case 'nat':

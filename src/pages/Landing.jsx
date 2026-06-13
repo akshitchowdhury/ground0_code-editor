@@ -17,8 +17,7 @@ export default function Landing() {
             Code. Run. <span className="gradient-text">Learn.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-zinc-400">
-            Ground Zer0 is a sandbox workspace for JavaScript, React, Python, Go, Java and Linux shell scripting —
-            with a live editor, instant output, and step-by-step guided tutorials.
+            Ground Zer0 is a sandbox workspace for architectural design and coding.
           </p>
         </div>
 
@@ -68,9 +67,9 @@ export default function Landing() {
             <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-600 shadow-lg shadow-fuchsia-950/50">
               <Cloud size={20} className="text-white" />
             </div>
-            <h2 className="text-xl font-bold text-white">Ground0 : Cloud</h2>
+            <h2 className="text-xl font-bold text-white">Ground0 : Architectural Design studio</h2>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Learn networking, cloud and DevOps with interactive play/pause flow boards — then prep for AWS certs and
+              Learn architectural design, LLM/agentic workflows, cloud and DevOps with interactive play/pause flow boards — then prep for AWS certs and
               interviews with AI-driven mock exams and feedback.
             </p>
             <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-fuchsia-400 group-hover:gap-2 transition-all">

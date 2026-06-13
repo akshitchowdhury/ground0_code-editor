@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Code2, GraduationCap, FlaskConical, Cloud, LogOut, User } from 'lucide-react'
+import { Code2, GraduationCap, FlaskConical, Cloud, LogOut, User, BrainCircuit } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import AuthModal from './AuthModal.jsx'
 
@@ -43,8 +43,8 @@ export default function Navbar() {
           <NavItem to="/learn" icon={GraduationCap}>
             Guided Mode
           </NavItem>
-          <NavItem to="/cloud" icon={Cloud}>
-            Ground0 : Cloud
+          <NavItem to="/cloud" icon={BrainCircuit}>
+          AI + Cloud Design studio 
           </NavItem>
         </nav>
       </div>

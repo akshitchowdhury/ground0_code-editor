@@ -7,7 +7,7 @@
 // when traffic 100×'s — and learn how to scale out of it.
 import {
   instanceRps, dbQps, nextType, nextDbClass,
-  CACHE_HIT_RATIO, CDN_OFFLOAD, BASE_LATENCY_MS,
+  CACHE_HIT_RATIO, CDN_OFFLOAD, BASE_LATENCY_MS, fmtRps,
 } from './specs.js'
 
 const MANAGED_CAPACITY = 1e9 // managed services we treat as effectively elastic
@@ -142,6 +142,85 @@ export function runLoadTest({ nodes = [], edges = [] }, { rps = 1000 } = {}) {
     tiers,
     instanceCounts,
     recommendations: recommend(bottleneck, cacheBacked, maxUtil),
+  }
+}
+
+// ── Load-flow visualisation on the design board ──────────────────────
+// Turns a load test into an animatable sequence: a request travels the path,
+// each tier coloured by utilisation (green ok · amber hot · red OVERFLOW), and
+// the connection BREAKS (red X) at the first saturated tier with a fix hint.
+const edgeBetween = (edges, a, b) => edges.find((e) => (e.from === a && e.to === b) || (e.from === b && e.to === a))
+
+export function buildLoadFlow({ nodes = [], edges = [] }, { rps = 1000 } = {}) {
+  const result = runLoadTest({ nodes, edges }, { rps })
+  if (!result.ok) return { ok: false, reason: result.reason, steps: [], nodeStatus: {} }
+
+  const entry = nodes.find((n) => n.kind === 'internet')
+  const levelOf = (t) => (t.scalable ? 'ok' : t.util > 1 ? 'over' : t.util > 0.7 ? 'warn' : 'ok')
+
+  const nodeStatus = {}
+  if (entry) nodeStatus[entry.id] = { level: 'ok', util: 100, scalable: true }
+  for (const t of result.tiers) {
+    nodeStatus[t.id] = { level: levelOf(t), util: Math.round(t.util * 100), scalable: t.scalable }
+  }
+
+  const steps = []
+  let prevId = entry?.id
+  let blocked = false
+  for (const t of result.tiers) {
+    if (blocked) break
+    const level = levelOf(t)
+    const verdict = level === 'over' ? 'blocked' : level === 'warn' ? 'insecure' : 'ok'
+    // ok → green, warn → amber (canvas default for 'insecure'), over → red (default for 'blocked')
+    const color = level === 'ok' ? 'rgb(74 222 128)' : undefined
+    const pct = Math.round(t.util * 100)
+    let note
+    if (level === 'over') {
+      const fix = result.recommendations?.find((r) => r.label)
+      note = `⚠ OVERFLOW at ${t.name}: ${t.incoming.toLocaleString()} req/s hitting only ${t.capacity.toLocaleString()} capacity (${pct}%). The connection breaks — requests are dropping.${fix ? ` Fix: ${fix.label}.` : ''}`
+    } else if (level === 'warn') {
+      note = `${t.name} is running hot — ${pct}% of capacity (${t.incoming.toLocaleString()}/${t.capacity.toLocaleString()} req/s). Latency climbing; close to the limit.`
+    } else {
+      note = t.scalable
+        ? `${t.name} scales automatically — absorbing ${t.incoming.toLocaleString()} req/s comfortably.`
+        : `${t.name}: ${pct}% used (${t.incoming.toLocaleString()}/${t.capacity.toLocaleString()} req/s). Healthy.`
+    }
+    if (prevId) {
+      steps.push({
+        edge: edgeBetween(edges, prevId, t.id) || { id: `lf${steps.length}` },
+        from: prevId,
+        to: t.id,
+        verdict,
+        color,
+        note,
+        packet: level === 'over' ? '⚠ overflow' : `${fmtRps(t.incoming)} rps`,
+      })
+    }
+    if (verdict === 'blocked') blocked = true
+    prevId = t.id
+  }
+
+  if (!blocked && entry) {
+    steps.push({
+      edge: { id: `lf${steps.length}` },
+      from: prevId,
+      to: entry.id,
+      verdict: 'ok',
+      color: 'rgb(74 222 128)',
+      note: `Every tier held up — ${fmtRps(result.servedRps)} req/s served and the response flows back to the user. ✓`,
+      packet: '200 OK ◀',
+    })
+  }
+
+  return {
+    ok: !blocked,
+    status: result.status,
+    servedRps: result.servedRps,
+    bottleneck: result.bottleneck,
+    recommendations: result.recommendations,
+    steps,
+    nodeStatus,
+    reason: null,
   }
 }
 

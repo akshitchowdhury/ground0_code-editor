@@ -7,6 +7,30 @@ function node(id, type, kind, name, icon, x, y, tier, ports, open, config) {
 
 export const TEMPLATES = [
   {
+    id: 'end-to-end',
+    name: 'End-to-end request flow',
+    desc: 'The full cycle: User → Client → Load Balancer → Firewall → Backend → Database, and the response back. Run a load test to watch it scale or break.',
+    build: () => ({
+      nodes: [
+        node('u', 'users', 'internet', 'Users / Internet', '🌐', 40, 300, 'internet', [], true, {}),
+        node('c', 'client', 'client', 'Client / Frontend', '🖥️', 220, 300, 'public', [443, 80], true, {}),
+        node('lb', 'alb', 'lb', 'Load Balancer', '⚖️', 410, 300, 'public', [443, 80], true, {}),
+        node('fw', 'firewall', 'waf', 'Firewall', '🧱', 600, 300, 'public', [443], true, {}),
+        node('be', 'backend', 'compute', 'Backend / API', '🧩', 790, 300, 'private', [8080], false, { instances: 2, autoScale: true, maxInstances: 10, instanceType: 't3.medium', iam: 'least' }),
+        node('db', 'rds', 'database', 'Database', '🗄️', 990, 220, 'private', [5432], false, { multiAz: true, dbClass: 'db.r5.large', readReplicas: 1, encrypted: true, backups: true }),
+        node('ca', 'elasticache', 'cache', 'Cache', '🧊', 990, 400, 'private', [6379], false, { cacheType: 'cache.t3.micro', encrypted: true }),
+      ],
+      edges: [
+        { id: 'x1', from: 'u', to: 'c', port: 443 },
+        { id: 'x2', from: 'c', to: 'lb', port: 443 },
+        { id: 'x3', from: 'lb', to: 'fw', port: 443 },
+        { id: 'x4', from: 'fw', to: 'be', port: 8080 },
+        { id: 'x5', from: 'be', to: 'db', port: 5432 },
+        { id: 'x6', from: 'be', to: 'ca', port: 6379 },
+      ],
+    }),
+  },
+  {
     id: 'secure-3tier',
     name: 'Secure 3-tier web app',
     desc: 'Internet → CDN → WAF → ALB → Auto Scaling app → Multi-AZ DB + cache. The well-architected baseline.',

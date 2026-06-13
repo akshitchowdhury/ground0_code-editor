@@ -4,6 +4,7 @@ import {
   ArrowLeft, Play, Pause, RotateCcw, Gauge, Cable, Trash2, X, Bot, Sparkles, ShieldCheck, Wand2,
 } from 'lucide-react'
 import ArchitectureCanvas from '../components/cloud/ArchitectureCanvas.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import {
   Palette, NodeInspector, EdgeInspector, ReviewPanel, ProfilePanel, BlueprintPicker, agentNodeMeta,
 } from '../components/cloud/AgentPanels.jsx'
@@ -197,15 +198,17 @@ export default function AgentStudio() {
         {/* Canvas + floating inspector */}
         <div className="panel relative min-w-0 flex-1 overflow-hidden">
           <div className="h-full w-full overflow-auto">
-            <ArchitectureCanvas
-              nodes={nodes} edges={edges} selected={selected} highlightIds={highlightIds}
-              connectMode={connectMode} pendingSourceId={pendingSource}
-              sim={simActive ? { steps: simSteps, index: simIndex, progress: simProgress, status: simStatus } : null}
-              onAddComponent={addComponent} onMoveNode={moveNode}
-              onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick}
-              renderNodeMeta={agentNodeMeta}
-              emptyHint="Pick a blueprint or drag building blocks to design your agent →"
-            />
+            <ErrorBoundary label="AgentCanvas">
+              <ArchitectureCanvas
+                nodes={nodes} edges={edges} selected={selected} highlightIds={highlightIds}
+                connectMode={connectMode} pendingSourceId={pendingSource}
+                sim={simActive ? { steps: simSteps, index: simIndex, progress: simProgress, status: simStatus } : null}
+                onAddComponent={addComponent} onMoveNode={moveNode}
+                onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick}
+                renderNodeMeta={agentNodeMeta}
+                emptyHint="Pick a blueprint or drag building blocks to design your agent →"
+              />
+            </ErrorBoundary>
           </div>
           {connectMode && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full border border-cyan-500/40 bg-zinc-950/90 px-3 py-1 text-[11px] text-cyan-300 backdrop-blur">
