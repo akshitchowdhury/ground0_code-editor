@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, CheckCircle2, BrainCircuit, Sparkles, Layers } from 'lucide-react'
+import { ArrowRight, CheckCircle2, BrainCircuit, Sparkles, Layers, Bot } from 'lucide-react'
 import { CLOUD_MODULES } from '../data/cloud/modules.js'
 import { getCloudLessons } from '../data/cloud/index.js'
 import { ACCENTS } from '../data/tracks.js'
@@ -86,6 +86,29 @@ export default function CloudHome() {
           </div>
           <span className="hidden items-center gap-1 text-sm font-medium text-cyan-300 transition-all group-hover:gap-2 sm:inline-flex">
             Open studio <ArrowRight size={15} />
+          </span>
+        </Link>
+
+        {/* Agentic Studio banner */}
+        <Link
+          to="/cloud/agent-studio"
+          className="group panel fade-up mb-8 flex items-center gap-5 border-fuchsia-500/30 p-5 transition-all hover:-translate-y-0.5 hover:border-fuchsia-400/60"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-600 shadow-lg shadow-fuchsia-950/50">
+            <Bot size={22} className="text-white" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+              Agentic Studio <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[10px] font-semibold text-fuchsia-300">New</span>
+            </h2>
+            <p className="mt-0.5 text-sm text-zinc-400">
+              Design LLM agents visually before you code: pick an agent type, choose how to train or ground it (RAG,
+              fine-tuning, tools, memory), wire the pipeline, play the data flow — and get warned about unsafe or
+              unoptimized designs.
+            </p>
+          </div>
+          <span className="hidden items-center gap-1 text-sm font-medium text-fuchsia-300 transition-all group-hover:gap-2 sm:inline-flex">
+            Build an agent <ArrowRight size={15} />
           </span>
         </Link>
 

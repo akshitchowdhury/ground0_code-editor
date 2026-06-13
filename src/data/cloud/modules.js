@@ -40,7 +40,7 @@ export const CLOUD_MODULES = [
   {
     id: 'ai',
     name: 'AI, ML & LLMs',
-    tagline: 'How machines learn, how LLMs generate text token by token, vector databases & RAG, and agentic workflows — all visualized.',
+    tagline: 'A visual path from ML basics & algorithms to LLMs, prompting, vector DBs & RAG, agents and LangChain / LangGraph.',
     accent: 'fuchsia',
     badge: '🧠',
   },

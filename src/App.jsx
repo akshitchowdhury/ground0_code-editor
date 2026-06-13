@@ -8,6 +8,7 @@ import TutorialPlayer from './pages/TutorialPlayer.jsx'
 import CloudHome from './pages/CloudHome.jsx'
 import CloudTopicPlayer from './pages/CloudTopicPlayer.jsx'
 import CloudDesigner from './pages/CloudDesigner.jsx'
+import AgentStudio from './pages/AgentStudio.jsx'
 import ExamLab from './pages/ExamLab.jsx'
 import Login from './pages/Login.jsx'
 import { useAuth } from './context/AuthContext.jsx'
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/cloud" element={<CloudHome />} />
           <Route path="/cloud/exam" element={<ExamLab />} />
           <Route path="/cloud/designer" element={<CloudDesigner />} />
+          <Route path="/cloud/agent-studio" element={<AgentStudio />} />
           <Route path="/cloud/:moduleId" element={<CloudTopicPlayer />} />
         </Routes>
       </main>

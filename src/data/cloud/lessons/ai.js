@@ -58,6 +58,46 @@ export default [
   },
 
   {
+    id: 'ml-algorithms',
+    title: 'Classic ML algorithms',
+    summary: 'The workhorse algorithms beyond neural nets — and when each shines.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Not all machine learning is deep learning. A handful of **classic algorithms** still win every day — especially on **tabular** data (rows and columns), where tree ensembles routinely beat neural networks while being faster and easier to interpret.',
+      },
+      { type: 'h3', text: 'Two big jobs' },
+      {
+        type: 'list',
+        items: [
+          '**Regression** — predict a **number** (house price, demand). Error measured by RMSE / MAE.',
+          '**Classification** — predict a **category** (spam / not-spam). Measured by accuracy, precision & recall.',
+          '**Clustering** — group similar items with **no labels** (customer segments).',
+          '**Dimensionality reduction** — squeeze many features into a few (PCA) for speed and visualization.',
+        ],
+      },
+      { type: 'h3', text: 'Getting it right' },
+      {
+        type: 'p',
+        text: 'The enemy is **overfitting** — memorizing the training data instead of the pattern. Defend with a **train / validation / test split**, **cross-validation**, and **regularization**. The **bias–variance trade-off** names the balance: too simple underfits, too complex overfits.',
+      },
+    ],
+    cards: {
+      title: 'The classic ML toolbox',
+      items: [
+        { icon: '📈', title: 'Linear Regression', text: 'Fit a straight line that minimizes squared error. Predicts a number — the "hello world" of ML.' },
+        { icon: '➗', title: 'Logistic Regression', text: 'Despite the name, a classifier: outputs a probability for a class. Fast, strong baseline.' },
+        { icon: '🌳', title: 'Decision Trees', text: 'A series of yes/no questions that split the data. Highly interpretable; overfits on its own.' },
+        { icon: '🌲', title: 'Random Forest & Boosting', text: 'Ensembles of many trees (XGBoost, LightGBM). Top performers on tabular data.' },
+        { icon: '📍', title: 'k-Nearest Neighbors', text: 'Classify a point by a majority vote of its closest examples. Simple; no real "training".' },
+        { icon: '🎯', title: 'k-Means Clustering', text: 'Unsupervised: partition data into k groups by closeness to cluster centers.' },
+        { icon: '➖', title: 'Support Vector Machine', text: 'Find the boundary with the widest margin between classes. Strong on smaller, clean datasets.' },
+        { icon: '🧊', title: 'PCA', text: 'Dimensionality reduction: keep the directions of greatest variance, drop the rest.' },
+      ],
+    },
+  },
+
+  {
     id: 'neural-networks',
     title: 'Neural networks: how models learn',
     summary: 'Neurons, weights, the forward pass, and learning by backpropagation.',
@@ -164,6 +204,60 @@ export default [
   },
 
   {
+    id: 'prompting',
+    title: 'Prompting & in-context learning',
+    summary: 'The prompt is the program — steer a frozen model without touching its weights.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'A pretrained LLM is frozen — yet you can dramatically change what it does just by changing the **prompt**. This is **in-context learning**: the model picks up the task from instructions and examples *inside the prompt*, with no weight updates at all.',
+      },
+      { type: 'h3', text: 'Ways to prompt' },
+      {
+        type: 'list',
+        items: [
+          '**Zero-shot** — just ask. "Classify this review as positive or negative."',
+          '**Few-shot** — show a handful of input→output examples first; the model imitates the pattern.',
+          '**System prompt** — set a persistent role and rules ("You are a terse SQL expert; answer in one query").',
+          '**Chain-of-thought** — "think step by step" makes the model show its reasoning, improving hard problems.',
+        ],
+      },
+      { type: 'h3', text: 'Knobs that matter' },
+      {
+        type: 'p',
+        text: '**Temperature / top-p** control randomness — low for facts, higher for creativity. Ask for **structured output** (JSON) when a program will read the result. Everything competes for the **context window**, and you pay per token — so be specific, not verbose. Watch a prompt get assembled on the board.',
+      },
+    ],
+    flow: {
+      title: 'Assembling a prompt',
+      w: 820,
+      h: 340,
+      nodes: [
+        { id: 'sys', x: 20, y: 30, icon: '⚙️', label: 'System prompt', sub: 'role + rules' },
+        { id: 'shots', x: 20, y: 150, icon: '🎓', label: 'Few-shot examples', sub: 'input → output' },
+        { id: 'userq', x: 20, y: 270, icon: '❓', label: 'User question' },
+        { id: 'prompt', x: 300, y: 150, icon: '📝', label: 'Prompt', sub: 'fits context window' },
+        { id: 'llm', x: 520, y: 150, icon: '🧠', label: 'LLM' },
+        { id: 'out', x: 690, y: 150, icon: '💬', label: 'Response' },
+      ],
+      edges: [
+        { from: 'sys', to: 'prompt' },
+        { from: 'shots', to: 'prompt' },
+        { from: 'userq', to: 'prompt' },
+        { from: 'prompt', to: 'llm' },
+        { from: 'llm', to: 'out' },
+      ],
+      steps: [
+        { from: 'sys', to: 'prompt', packet: 'role + rules', text: 'The system prompt sets the model’s persona and constraints — applied to everything that follows.' },
+        { from: 'shots', to: 'prompt', packet: '2–3 examples', text: 'Few-shot examples show the exact pattern you want. The model learns it in-context — no training, no weight changes.' },
+        { from: 'userq', to: 'prompt', packet: 'the real task', text: 'Your actual question is appended after the examples.' },
+        { from: 'prompt', to: 'llm', packet: 'one big prompt', text: 'System + examples + question form a single prompt — and all of it must fit inside the context window (which costs tokens).' },
+        { from: 'llm', to: 'out', packet: 'answer', text: 'The model continues the pattern. Lower the temperature for facts, raise it for creativity, and request JSON when code will parse the result.' },
+      ],
+    },
+  },
+
+  {
     id: 'embeddings-rag',
     title: 'Embeddings & vector databases (RAG)',
     summary: 'Give an LLM your own knowledge with semantic search — not retraining.',
@@ -220,6 +314,40 @@ export default [
   },
 
   {
+    id: 'rag-vs-finetune',
+    title: 'Prompting vs RAG vs fine-tuning',
+    summary: 'Three ways to customize an LLM — and how to choose between them.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'When the base model isn’t enough, you have three levers. They are not rivals — production systems often combine them — but they solve different problems, so naming the problem first saves a lot of wasted effort.',
+      },
+      { type: 'h3', text: 'The rule of thumb' },
+      {
+        type: 'list',
+        items: [
+          '**Need new knowledge** (private docs, fresh facts)? → **RAG**. Never fine-tune just to add facts.',
+          '**Need new behavior** (tone, format, a narrow skill)? → **fine-tuning**, or a strong system prompt.',
+          '**Just need a quick tweak**? → **prompting**. Always try this first; it’s instant and free.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Cost and effort climb left to right: prompting is immediate, RAG adds a retrieval step and a vector store, fine-tuning needs labeled data, a training run and evaluation. Whatever you choose, **measure** it against a fixed test set.',
+      },
+    ],
+    cards: {
+      title: 'Pick the right lever',
+      items: [
+        { icon: '💬', title: 'Prompting / few-shot', text: 'Change behavior with instructions + examples. Fastest, cheapest, no infra. Start here, always.' },
+        { icon: '📚', title: 'RAG', text: 'Inject private or fresh knowledge at query time via retrieval. The model stays frozen; data stays current and citable.' },
+        { icon: '🎛️', title: 'Fine-tuning', text: 'Update the model’s weights on your examples to bake in style, format or a skill. Powerful, but slower and costlier.' },
+        { icon: '🔗', title: 'Combine them', text: 'Common in production: fine-tune for behavior, RAG for knowledge, prompt to orchestrate. Not either/or.' },
+      ],
+    },
+  },
+
+  {
     id: 'agentic-workflows',
     title: 'Agentic workflows',
     summary: 'An LLM that reasons, calls tools, observes results, and loops until done.',
@@ -271,6 +399,59 @@ export default [
         { from: 'obs', to: 'agent', packet: 'observation ◀', reverse: true, text: 'The agent observes the result and reasons again: enough info, or call another tool? This Reason → Act → Observe cycle is the heart of an agent.' },
         { from: 'agent', to: 'mem', packet: 'save state', text: 'It records progress in memory so it keeps track across many steps on a long task.' },
         { from: 'agent', to: 'answer', packet: 'goal met ✓', text: 'Once the goal is satisfied, it exits the loop and returns the final answer. An agent = an LLM + tools + a loop + memory.' },
+      ],
+    },
+  },
+
+  {
+    id: 'langchain-langgraph',
+    title: 'LangChain & LangGraph',
+    summary: 'Frameworks that wire LLMs, tools and state into real applications.',
+    blocks: [
+      {
+        type: 'p',
+        text: 'Once you go beyond a single prompt, you need plumbing: prompt templates, model calls, output parsing, tools, retrievers, memory. **LangChain** is a framework that provides these building blocks and lets you **compose** them into pipelines.',
+      },
+      { type: 'h3', text: 'Chains vs graphs' },
+      {
+        type: 'list',
+        items: [
+          '**LangChain chains** are mostly **linear**: `prompt | model | parser`, or retrieve → stuff → answer. Great for straightforward flows.',
+          'Real agents need **loops and branches** — call a tool, look at the result, decide what to do next, maybe repeat.',
+          '**LangGraph** models the app as a **state graph**: **nodes** (LLM calls or functions) that read/write a shared **state**, **edges** for control flow, and **conditional edges** for branching and **cycles**.',
+          'That graph gives durable, inspectable agents with **memory**, **retries**, **human-in-the-loop** approvals and **multi-agent** orchestration.',
+        ],
+      },
+      {
+        type: 'p',
+        text: 'Related tools worth knowing: **LlamaIndex** (data / RAG-centric), **CrewAI** and **AutoGen** (multi-agent). The board shows a LangGraph agent looping through a tool until it’s done.',
+      },
+    ],
+    flow: {
+      title: 'A LangGraph agent as a state machine',
+      w: 820,
+      h: 360,
+      nodes: [
+        { id: 'start', x: 20, y: 160, icon: '🏁', label: 'START', sub: 'input → state' },
+        { id: 'agent', x: 220, y: 160, icon: '🤖', label: 'Agent node', sub: 'LLM reads state' },
+        { id: 'route', x: 440, y: 160, icon: '🔀', label: 'Conditional edge', sub: 'needs a tool?' },
+        { id: 'tools', x: 640, y: 40, icon: '🛠️', label: 'Tool node', sub: 'execute' },
+        { id: 'end', x: 640, y: 280, icon: '🏆', label: 'END', sub: 'final state' },
+      ],
+      edges: [
+        { from: 'start', to: 'agent' },
+        { from: 'agent', to: 'route' },
+        { from: 'route', to: 'tools', label: 'yes → act' },
+        { from: 'tools', to: 'agent', dashed: true, label: 'update state ↺' },
+        { from: 'route', to: 'end', label: 'no → finish' },
+      ],
+      steps: [
+        { from: 'start', to: 'agent', packet: 'user input', text: 'LangGraph models the app as a graph of nodes sharing one State object. Input enters at START and flows to the Agent node.' },
+        { from: 'agent', to: 'route', packet: 'LLM decision', text: 'The Agent node calls the LLM, which reads the current state and decides what to do next.' },
+        { from: 'route', to: 'tools', packet: 'tool call', text: 'A conditional edge branches on that decision: if a tool is needed, route to the Tool node.' },
+        { from: 'tools', to: 'agent', packet: 'result → state ↺', reverse: true, text: 'The tool runs, writes its result back into the shared state, and the graph loops to the Agent — explicit, debuggable cycles a plain linear chain cannot do.' },
+        { from: 'agent', to: 'route', packet: 'reason again', text: 'The agent reasons again with the new information now in state…' },
+        { from: 'route', to: 'end', packet: 'done ✓', text: '…and when no more tools are needed, the conditional edge routes to END with the final answer. Nodes + shared state + conditional edges = controllable agents.' },
       ],
     },
   },

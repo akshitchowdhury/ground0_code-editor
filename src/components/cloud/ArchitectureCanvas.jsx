@@ -42,6 +42,8 @@ export default function ArchitectureCanvas({
   onNodeClick, // (id)
   onEdgeClick, // (edgeId)
   onBackgroundClick,
+  renderNodeMeta, // optional (node) => JSX for the node's second line
+  emptyHint = 'Drag components from the palette to start designing →',
 }) {
   const boardRef = useRef(null)
   const pressRef = useRef(null)
@@ -95,11 +97,13 @@ export default function ArchitectureCanvas({
     onAddComponent(componentId, clamp(p.x - NODE_W / 2, 0, BOARD_W - NODE_W), clamp(p.y - NODE_H / 2, 0, BOARD_H - NODE_H))
   }
 
-  // Verdict reached on each edge so far in the running simulation.
+  // Verdict + stage colour reached on each edge so far in the running simulation.
   const edgeVerdict = {}
+  const edgeColor = {}
   if (sim?.steps) {
     sim.steps.slice(0, sim.index + 1).forEach((s) => {
       edgeVerdict[s.edge.id] = s.verdict
+      if (s.color) edgeColor[s.edge.id] = s.color
     })
   }
 
@@ -113,9 +117,15 @@ export default function ArchitectureCanvas({
       const a = borderPoint(from, center(to))
       const b = borderPoint(to, center(from))
       const t = curStep.verdict === 'blocked' ? Math.min(sim.progress, 0.82) : sim.progress
-      packet = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, verdict: curStep.verdict, label: curStep.packet }
+      packet = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, verdict: curStep.verdict, label: curStep.packet, color: curStep.color }
     }
   }
+  // Stage colour wins for normal flow; amber/red verdicts override it.
+  const packetColor = packet
+    ? packet.verdict === 'ok'
+      ? packet.color || VERDICT_COLOR.ok
+      : packetColor
+    : null
   const activeNodeIds = curStep ? new Set([curStep.from, curStep.to]) : new Set()
   const blockedHere =
     curStep && curStep.verdict === 'blocked' && sim.progress >= 0.8 ? byId[curStep.to] : null
@@ -146,6 +156,10 @@ export default function ArchitectureCanvas({
           <marker id="ac-arrow-cyan" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
             <path d="M0,0 L8,4.5 L0,9 Z" fill="rgb(34 211 238)" />
           </marker>
+          {/* arrowhead inherits the line's stroke colour (stage colour) */}
+          <marker id="ac-arrow-stage" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+            <path d="M0,0 L8,4.5 L0,9 Z" fill="context-stroke" />
+          </marker>
         </defs>
 
         {edges.map((e) => {
@@ -158,7 +172,16 @@ export default function ArchitectureCanvas({
           const my = (p1.y + p2.y) / 2
           const verdict = edgeVerdict[e.id]
           const isSel = selected?.type === 'edge' && selected.id === e.id
-          const color = verdict ? VERDICT_COLOR[verdict] : isSel ? 'rgb(34 211 238)' : 'rgb(82 82 91)'
+          const color =
+            verdict === 'blocked'
+              ? VERDICT_COLOR.blocked
+              : verdict === 'insecure'
+                ? VERDICT_COLOR.insecure
+                : verdict === 'ok'
+                  ? edgeColor[e.id] || VERDICT_COLOR.ok
+                  : isSel
+                    ? 'rgb(34 211 238)'
+                    : 'rgb(82 82 91)'
           return (
             <g key={e.id}>
               {/* fat invisible hit area for easy selecting */}
@@ -183,15 +206,22 @@ export default function ArchitectureCanvas({
                 stroke={color}
                 strokeWidth={verdict || isSel ? 2.4 : 1.6}
                 strokeDasharray={verdict === 'blocked' ? '7 5' : undefined}
-                markerEnd={`url(#${verdict === 'ok' ? 'ac-arrow-cyan' : 'ac-arrow'})`}
+                markerEnd={`url(#${verdict === 'ok' ? 'ac-arrow-stage' : 'ac-arrow'})`}
                 style={{ pointerEvents: 'none' }}
               />
-              <g style={{ pointerEvents: 'none' }}>
-                <rect x={mx - 17} y={my - 9} width="34" height="17" rx="5" fill="rgb(9 9 11 / 0.9)" stroke={color} strokeOpacity="0.5" />
-                <text x={mx} y={my + 3} textAnchor="middle" fontSize="10" fontFamily="JetBrains Mono, monospace" fill={color}>
-                  :{e.port}
-                </text>
-              </g>
+              {(() => {
+                const badge = e.port != null ? `:${e.port}` : e.label
+                if (!badge) return null
+                const bw = badge.length * 6.1 + 12
+                return (
+                  <g style={{ pointerEvents: 'none' }}>
+                    <rect x={mx - bw / 2} y={my - 9} width={bw} height="17" rx="5" fill="rgb(9 9 11 / 0.9)" stroke={color} strokeOpacity="0.5" />
+                    <text x={mx} y={my + 3} textAnchor="middle" fontSize="10" fontFamily="JetBrains Mono, monospace" fill={color}>
+                      {badge}
+                    </text>
+                  </g>
+                )
+              })()}
             </g>
           )
         })}
@@ -199,12 +229,12 @@ export default function ArchitectureCanvas({
         {/* Packet */}
         {packet && (
           <g style={{ pointerEvents: 'none' }}>
-            <circle cx={packet.x} cy={packet.y} r="13" fill={VERDICT_COLOR[packet.verdict]} opacity="0.18">
+            <circle cx={packet.x} cy={packet.y} r="13" fill={packetColor} opacity="0.18">
               <animate attributeName="r" values="11;16;11" dur="1.2s" repeatCount="indefinite" />
             </circle>
-            <circle cx={packet.x} cy={packet.y} r="6.5" fill={VERDICT_COLOR[packet.verdict]} />
-            <rect x={packet.x - 22} y={packet.y - 32} width="44" height="18" rx="6" fill="rgb(9 9 11 / 0.92)" stroke={VERDICT_COLOR[packet.verdict]} strokeOpacity="0.6" />
-            <text x={packet.x} y={packet.y - 19} textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill={VERDICT_COLOR[packet.verdict]}>
+            <circle cx={packet.x} cy={packet.y} r="6.5" fill={packetColor} />
+            <rect x={packet.x - 22} y={packet.y - 32} width="44" height="18" rx="6" fill="rgb(9 9 11 / 0.92)" stroke={packetColor} strokeOpacity="0.6" />
+            <text x={packet.x} y={packet.y - 19} textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill={packetColor}>
               {packet.label}
             </text>
           </g>
@@ -251,19 +281,23 @@ export default function ArchitectureCanvas({
                 <Globe size={11} className="ml-auto shrink-0 text-rose-400" title="Open to 0.0.0.0/0" />
               )}
             </div>
-            <div className="mt-1 flex items-center gap-1 text-[9.5px] text-zinc-500">
-              <span className="uppercase tracking-wide">{n.tier}</span>
-              {n.ports?.length > 0 && (
-                <span className="ml-auto truncate font-mono text-zinc-400">:{n.ports.join(' :')}</span>
-              )}
-            </div>
+            {renderNodeMeta ? (
+              renderNodeMeta(n)
+            ) : (
+              <div className="mt-1 flex items-center gap-1 text-[9.5px] text-zinc-500">
+                <span className="uppercase tracking-wide">{n.tier}</span>
+                {n.ports?.length > 0 && (
+                  <span className="ml-auto truncate font-mono text-zinc-400">:{n.ports.join(' :')}</span>
+                )}
+              </div>
+            )}
           </div>
         )
       })}
 
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="text-sm text-zinc-600">Drag components from the palette to start designing →</p>
+          <p className="text-sm text-zinc-600">{emptyHint}</p>
         </div>
       )}
     </div>
