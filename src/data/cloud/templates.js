@@ -84,6 +84,32 @@ export const TEMPLATES = [
     }),
   },
   {
+    id: 'nat-egress',
+    name: 'Private egress via NAT',
+    desc: 'A private backend serves user requests AND reaches the internet outbound through a NAT Gateway — to install packages and call third-party APIs. Inbound from the internet stays blocked. Run the flow to watch the one-way egress.',
+    build: () => ({
+      nodes: [
+        node('g-users', 'users', 'internet', 'Users / Internet', '🌐', 40, 340, 'internet', [], true, {}),
+        node('g-alb', 'alb', 'lb', 'Load Balancer', '⚖️', 250, 340, 'public', [443, 80], true, {}),
+        node('g-be', 'backend', 'compute', 'Backend / API', '🧩', 480, 340, 'private', [8080], false, {
+          instances: 2, autoScale: true, maxInstances: 10, instanceType: 't3.medium', iam: 'least',
+        }),
+        node('g-rds', 'rds', 'database', 'RDS Database', '🗄️', 720, 340, 'private', [5432], false, {
+          multiAz: true, dbClass: 'db.r5.large', readReplicas: 1, encrypted: true, backups: true,
+        }),
+        node('g-nat', 'nat', 'nat', 'NAT Gateway', '🔀', 480, 160, 'public', [], false, {}),
+      ],
+      edges: [
+        { id: 'g-e1', from: 'g-users', to: 'g-alb', port: 443 },
+        { id: 'g-e2', from: 'g-alb', to: 'g-be', port: 8080 },
+        { id: 'g-e3', from: 'g-be', to: 'g-rds', port: 5432 },
+        // Outbound only: the private backend egresses to the internet via the NAT.
+        { id: 'g-e4', from: 'g-be', to: 'g-nat', port: 443 },
+        { id: 'g-e5', from: 'g-nat', to: 'g-users', port: 443 },
+      ],
+    }),
+  },
+  {
     id: 'serverless-api',
     name: 'Serverless API',
     desc: 'API Gateway → Lambda → DynamoDB. Scales to zero, nothing to patch, pay per request.',

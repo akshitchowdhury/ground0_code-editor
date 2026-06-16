@@ -13,6 +13,8 @@
 //
 // Verdicts still override colour: 'insecure' → amber, 'blocked' → red X.
 
+import { classifyAgentEdge } from './rules.js'
+
 export const STAGE_COLORS = {
   request: 'rgb(34 211 238)', // cyan
   ingestion: 'rgb(167 139 250)', // violet
@@ -150,6 +152,13 @@ export function simulateAgent({ nodes = [], edges = [] }, { mode = 'lifecycle' }
       if (covered.has(e.id)) continue
       const a = byId[e.from], b = byId[e.to]
       if (!a || !b) continue
+      // Flag an illogical wire in amber rather than pretending it's part of the flow.
+      const legal = classifyAgentEdge(a, b)
+      if (!legal.ok) {
+        steps.push({ edge: e, from: e.from, to: e.to, packet: '⚠ invalid', note: `Invalid wiring — ${legal.reason}`, verdict: 'insecure', color: STAGE_COLORS.request })
+        covered.add(e.id)
+        continue
+      }
       const role = supportingRole(a, b)
       steps.push({ edge: e, from: e.from, to: e.to, packet: role.packet, note: role.note, verdict: 'ok', color: role.color })
       covered.add(e.id)

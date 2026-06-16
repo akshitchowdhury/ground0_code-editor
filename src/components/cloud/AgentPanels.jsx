@@ -5,6 +5,7 @@ import {
   DATA_SOURCE_OPTIONS, AGENT_BLUEPRINTS,
 } from '../../data/cloud/agentComponents.js'
 import { FINDING_STYLES, CATEGORY_LABELS } from '../../lib/agent/analyze.js'
+import { BUILD_STEPS } from '../../lib/agent/rules.js'
 
 // ── shared controls ──
 const ACCENT_CLASS = { emerald: 'accent-emerald-500', rose: 'accent-rose-500' }
@@ -181,11 +182,17 @@ export function ReviewPanel({ analysis, highlightFinding, onHighlight }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-2.5 border-b border-zinc-800 p-3">
+        <ScoreBar label="Pipeline correctness" value={analysis.correctnessScore} />
         <ScoreBar label="Safety" value={analysis.safetyScore} />
-        <ScoreBar label="Design & correctness" value={analysis.designScore} />
+        <ScoreBar label="Design (reliability & cost)" value={analysis.designScore} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {analysis.findings.length === 0 ? (
+        {analysis.empty ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center text-zinc-500">
+            <Sparkles size={22} className="text-zinc-600" />
+            <p className="text-xs">Nothing built yet — pick a blueprint or drag in a User and an Agent to begin.</p>
+          </div>
+        ) : analysis.findings.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center text-zinc-500">
             <CircleCheck size={22} className="text-emerald-400" />
             <p className="text-xs">No issues found. Solid agent design.</p>
@@ -267,27 +274,49 @@ export function ProfilePanel({ profile }) {
 
 // ── Blueprint picker (choose what kind of agent to build) ──
 export function BlueprintPicker({ onPick, onClose, onRisky }) {
+  // Beginner blueprints first so newcomers start small.
+  const ordered = [...AGENT_BLUEPRINTS].sort((a, b) => (a.level === 'beginner' ? 0 : 1) - (b.level === 'beginner' ? 0 : 1))
   return (
     <div onClick={onClose} className="absolute inset-0 z-30 flex items-center justify-center bg-zinc-950/50 p-4 backdrop-blur-sm">
-      <div onClick={(e) => e.stopPropagation()} className="fade-up w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-900/95 p-5 shadow-2xl">
-        <div className="flex items-start justify-between">
+      <div onClick={(e) => e.stopPropagation()} className="fade-up flex max-h-[92%] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/95 shadow-2xl">
+        <div className="flex items-start justify-between p-5 pb-3">
           <div>
             <h2 className="text-lg font-bold text-white">What kind of agent are you building?</h2>
-            <p className="mt-0.5 text-sm text-zinc-400">Pick a blueprint — it drops a working pipeline you can edit, simulate and review.</p>
+            <p className="mt-0.5 text-sm text-zinc-400">Each blueprint drops a working, <span className="text-zinc-300">valid</span> pipeline you can edit, run and review. New to this? Start with a <span className="text-emerald-300">Beginner</span> one and read how it works.</p>
           </div>
           {onClose && <button onClick={onClose} className="btn-ghost !p-1 text-zinc-500"><CircleX size={16} /></button>}
         </div>
-        <div className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {AGENT_BLUEPRINTS.map((b) => (
-            <button key={b.id} onClick={() => onPick(b.id)}
-              className="group rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-fuchsia-500/50">
-              <span className="text-xl">{b.icon}</span>
-              <p className="mt-1.5 text-sm font-bold text-white">{b.name}</p>
-              <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">{b.desc}</p>
-            </button>
-          ))}
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {ordered.map((b) => (
+              <button key={b.id} onClick={() => onPick(b.id)}
+                className="group flex flex-col rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-fuchsia-500/50">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{b.icon}</span>
+                  {b.level === 'beginner' && <span className="ml-auto rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-emerald-300">Beginner</span>}
+                </div>
+                <p className="mt-1.5 text-sm font-bold text-white">{b.name}</p>
+                <p className="mt-0.5 text-[11px] leading-snug text-zinc-400">{b.explain || b.desc}</p>
+              </button>
+            ))}
+          </div>
+
+          {/* Step-by-step build guide */}
+          <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Prefer to build from scratch? Add pieces in this order</p>
+            <ol className="grid gap-1.5 sm:grid-cols-2">
+              {BUILD_STEPS.map((s) => (
+                <li key={s.n} className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-fuchsia-500/20 text-[9px] font-bold text-fuchsia-300">{s.n}</span>
+                  <p className="text-[11px] leading-snug text-zinc-400"><span className="font-medium text-zinc-200">{s.title}.</span> {s.detail}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
         </div>
-        <div className="mt-4 flex items-center justify-between border-t border-zinc-800 pt-3">
+
+        <div className="flex items-center justify-between border-t border-zinc-800 p-3 px-5">
           <button onClick={onRisky} className="text-[11px] text-amber-300/90 hover:text-amber-200">⚠ Load a deliberately risky draft (see the warnings)</button>
           <button onClick={onClose} className="btn-ghost text-xs">Start from scratch →</button>
         </div>

@@ -8,11 +8,15 @@
 // fine-tuning), and always evaluate + observe.
 import { MODELS, getBlueprint } from '../../data/cloud/agentComponents.js'
 import { FINDING_STYLES } from '../cloud/analyze.js'
+import { classifyAgentEdge } from './rules.js'
 
 export { FINDING_STYLES }
 
 const LEVEL_WEIGHT = { critical: 30, high: 17, warn: 9, info: 4 }
 const SAFETY_CATS = ['safety']
+// "Pipeline correctness" — is the agent wired into a valid, connected,
+// logical flow (no illegal wiring, no orphans, has an entry + a brain).
+const CORRECTNESS_CATS = ['correctness']
 
 export const CATEGORY_LABELS = {
   correctness: 'Correctness',
@@ -23,6 +27,15 @@ export const CATEGORY_LABELS = {
 }
 
 export function analyzeAgent({ nodes = [], edges = [], blueprintId = null }) {
+  // Clean slate — nothing is set up yet, so nothing scores. (An empty board
+  // shouldn't read as "Production-ready".)
+  if (!nodes.length) {
+    return {
+      findings: [], correctnessScore: 0, safetyScore: 0, designScore: 0, overall: 0,
+      verdict: { label: 'Empty canvas', tone: 'warn' }, empty: true,
+    }
+  }
+
   const findings = []
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]))
   const add = (level, category, title, detail, nodeIds = []) =>
@@ -38,6 +51,20 @@ export function analyzeAgent({ nodes = [], edges = [], blueprintId = null }) {
     }
   })
   const neighborsOf = (id) => (adj[id] || []).map((x) => byId[x]).filter(Boolean)
+
+  // 0. Illogical wiring — same rule the connect tool + simulator use. Each
+  //    illegal edge is a critical correctness finding and flips the verdict.
+  let invalidCount = 0
+  for (const e of edges) {
+    const from = byId[e.from]
+    const to = byId[e.to]
+    if (!from || !to) continue
+    const res = classifyAgentEdge(from, to)
+    if (res.level === 'illegal') {
+      invalidCount++
+      add('critical', 'correctness', `Invalid wiring: ${from.name} → ${to.name}`, res.reason, [from.id, to.id])
+    }
+  }
 
   const of = (kind) => nodes.filter((n) => n.kind === kind)
   const has = (kind) => nodes.some((n) => n.kind === kind)
@@ -174,20 +201,27 @@ export function analyzeAgent({ nodes = [], edges = [], blueprintId = null }) {
   }
 
   // ── scoring ──
+  // Three independent dimensions (greener = better):
+  //   • correctness — valid, connected, logical pipeline
+  //   • safety      — guardrails, human gates, sandboxing
+  //   • design      — everything else (reliability / data / cost)
   const penalty = (keep) => findings.filter(keep).reduce((s, f) => s + (LEVEL_WEIGHT[f.level] || 0), 0)
   const isSafety = (c) => SAFETY_CATS.includes(c)
+  const isCorrectness = (c) => CORRECTNESS_CATS.includes(c)
+  const correctnessScore = clamp(100 - penalty((f) => isCorrectness(f.category)))
   const safetyScore = clamp(100 - penalty((f) => isSafety(f.category)))
-  const designScore = clamp(100 - penalty((f) => !isSafety(f.category)))
-  const overall = Math.round((safetyScore + designScore) / 2)
+  const designScore = clamp(100 - penalty((f) => !isSafety(f.category) && !isCorrectness(f.category)))
+  const overall = Math.round((correctnessScore + safetyScore + designScore) / 3)
 
   let verdict
-  if (findings.some((f) => f.level === 'critical')) verdict = { label: 'Broken', tone: 'bad' }
+  if (invalidCount) verdict = { label: 'Invalid wiring', tone: 'bad' }
+  else if (findings.some((f) => f.level === 'critical')) verdict = { label: 'Broken', tone: 'bad' }
   else if (findings.some((f) => f.level === 'high')) verdict = { label: 'Risky', tone: 'bad' }
   else if (overall >= 90) verdict = { label: 'Production-ready', tone: 'good' }
   else if (overall >= 70) verdict = { label: 'Promising', tone: 'warn' }
   else verdict = { label: 'Needs work', tone: 'warn' }
 
-  return { findings, safetyScore, designScore, overall, verdict }
+  return { findings, correctnessScore, safetyScore, designScore, overall, verdict, empty: false }
 }
 
 function clamp(v) {

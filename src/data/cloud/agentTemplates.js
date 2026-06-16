@@ -10,6 +10,24 @@ function e(id, from, to, label) {
 }
 
 export const AGENT_TEMPLATES = {
+  'first-agent': {
+    name: 'Your first agent (start here)',
+    blueprint: 'start-simple',
+    build: () => ({
+      nodes: [
+        n('user', 'user', 'app', 'User / App', '👤', 80, 280),
+        n('prompt', 'prompt', 'prompt', 'System prompt', '⚙️', 320, 140),
+        n('agent', 'agent', 'agent', 'Agent', '🤖', 320, 280, { pattern: 'react', maxSteps: 4, model: 'gpt-4o-mini' }),
+        n('resp', 'response', 'output', 'Response', '💬', 580, 280),
+      ],
+      edges: [
+        e('e1', 'user', 'agent', 'request'),
+        e('e2', 'prompt', 'agent', 'system'),
+        e('e3', 'agent', 'resp', 'answer'),
+      ],
+    }),
+  },
+
   'rag-qa': {
     name: 'RAG Q&A Assistant',
     blueprint: 'rag-qa',

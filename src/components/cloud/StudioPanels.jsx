@@ -214,11 +214,17 @@ export function ReviewPanel({ analysis, highlightFinding, onHighlight }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-2.5 border-b border-zinc-800 p-3">
+        <ScoreBar label="Setup correctness" value={analysis.correctnessScore} />
         <ScoreBar label="Security (incl. IAM & data)" value={analysis.securityScore} />
         <ScoreBar label="Reliability, cost & network" value={analysis.designScore} />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        {analysis.findings.length === 0 ? (
+        {analysis.empty ? (
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center text-zinc-500">
+            <Sparkles size={22} className="text-zinc-600" />
+            <p className="text-xs">Nothing built yet — drop components and connect them to start scoring.</p>
+          </div>
+        ) : analysis.findings.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1.5 text-center text-zinc-500">
             <CircleCheck size={22} className="text-emerald-400" />
             <p className="text-xs">No issues found. Clean architecture.</p>

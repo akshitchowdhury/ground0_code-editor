@@ -8,11 +8,16 @@
 // `openToInternet`, `config`), so this module never touches the catalog.
 
 import { STATEFUL_KINDS, COMPUTE_KINDS, PUBLIC_ENTRY_KINDS, SENSITIVE_PORTS } from '../../data/cloud/components.js'
+import { classifyEdge } from './rules.js'
 
 const LEVEL_WEIGHT = { critical: 30, high: 17, warn: 9, info: 4, ok: 0 }
 const SECURITY_CATS = ['security', 'iam', 'storage']
+// "Setup correctness" — is the system wired into a valid, connected, logical
+// whole (no illegal/backwards flow, no orphans, has an entry, cache has a DB).
+const CORRECTNESS_CATS = ['correctness']
 
 export const CATEGORY_LABELS = {
+  correctness: 'Setup',
   security: 'Security',
   iam: 'IAM',
   storage: 'Storage',
@@ -64,6 +69,15 @@ function reachableFromInternet(nodes, graph) {
 }
 
 export function analyzeArchitecture({ nodes = [], edges = [] }) {
+  // Clean slate — nothing is set up yet, so every score starts at 0 (an empty
+  // board should never read as "Well-architected").
+  if (!nodes.length) {
+    return {
+      findings: [], correctnessScore: 0, securityScore: 0, designScore: 0, overall: 0,
+      verdict: { label: 'Empty canvas', tone: 'warn' }, empty: true,
+    }
+  }
+
   const findings = []
   const byId = Object.fromEntries(nodes.map((n) => [n.id, n]))
   const graph = buildGraph(nodes, edges)
@@ -71,6 +85,23 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
 
   const add = (level, category, title, detail, nodeIds = []) =>
     findings.push({ id: `${category}-${findings.length}`, level, category, title, detail, nodeIds })
+
+  // ── TOPOLOGY: illogical / impossible wiring ─────────────────────
+  // A request must flow Web → Security → Load Balancer → Compute → Data, never
+  // backwards or short-circuited. classifyEdge() is the single source of truth
+  // (shared with the flow simulator, which blocks these hops). Each illegal
+  // edge is a critical finding and flips the verdict to "Invalid setup".
+  let invalidCount = 0
+  for (const e of edges) {
+    const from = byId[e.from]
+    const to = byId[e.to]
+    if (!from || !to) continue
+    const res = classifyEdge(from, to)
+    if (res.level === 'illegal') {
+      invalidCount++
+      add('critical', 'correctness', `Illogical connection: ${from.name} → ${to.name}`, res.reason, [from.id, to.id])
+    }
+  }
 
   // ── SECURITY ────────────────────────────────────────────────────
 
@@ -319,6 +350,19 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
   const hasDatabase = nodes.some((n) => n.kind === 'database')
   const hasCache = nodes.some((n) => n.kind === 'cache')
   const hasCdn = nodes.some((n) => n.kind === 'cdn')
+
+  // A cache is never the system of record — it must have a database behind it.
+  // A Redis/ElastiCache node alone (no DB) is a data-loss waiting to happen.
+  if (hasCache && !hasDatabase) {
+    add(
+      'high',
+      'correctness',
+      'Cache has no database behind it',
+      'A cache (Redis / ElastiCache) is volatile and only speeds up reads — it cannot be the source of truth. Add a database for the cache to read through (cache-aside) and to persist data; a cache can never stand alone as the data tier.',
+      nodes.filter((n) => n.kind === 'cache').map((n) => n.id),
+    )
+  }
+
   if (hasDatabase && reachable.size > 1 && !hasCache && !hasCdn) {
     add(
       'info',
@@ -335,7 +379,7 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
     if ((graph.undirected[n.id] || []).length === 0) {
       add(
         'warn',
-        'reliability',
+        'correctness',
         `${n.name} is not connected`,
         `${n.name} has no connections, so no traffic can reach it. Wire it into the flow or remove it.`,
         [n.id],
@@ -347,7 +391,7 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
   if (nodes.length > 0 && !nodes.some(isInternet) && (hasLb || computeNodes.length)) {
     add(
       'info',
-      'reliability',
+      'correctness',
       'No internet entry point',
       'Drop a "Users / Internet" node and connect it to your front door so you can simulate a real request end-to-end.',
       [],
@@ -355,24 +399,29 @@ export function analyzeArchitecture({ nodes = [], edges = [] }) {
   }
 
   // ── SCORING ─────────────────────────────────────────────────────
-  // Security score penalises security-family findings (incl. IAM + storage);
-  // design score penalises everything else (reliability / perf / network / cost).
+  // Three independent dimensions, each 100 = perfect and greener:
+  //   • correctness — valid, connected, logical topology
+  //   • security    — security-family findings (incl. IAM + data)
+  //   • design      — everything else (reliability / perf / network / cost)
   const penalty = (keep) =>
     findings.filter(keep).reduce((s, f) => s + (LEVEL_WEIGHT[f.level] || 0), 0)
 
   const isSecurityCat = (c) => SECURITY_CATS.includes(c)
+  const isCorrectnessCat = (c) => CORRECTNESS_CATS.includes(c)
+  const correctnessScore = clamp(100 - penalty((f) => isCorrectnessCat(f.category)))
   const securityScore = clamp(100 - penalty((f) => isSecurityCat(f.category)))
-  const designScore = clamp(100 - penalty((f) => !isSecurityCat(f.category)))
-  const overall = Math.round((securityScore + designScore) / 2)
+  const designScore = clamp(100 - penalty((f) => !isSecurityCat(f.category) && !isCorrectnessCat(f.category)))
+  const overall = Math.round((correctnessScore + securityScore + designScore) / 3)
 
   let verdict
   const hasCritical = findings.some((f) => f.level === 'critical')
-  if (hasCritical) verdict = { label: 'Insecure', tone: 'bad' }
+  if (invalidCount) verdict = { label: 'Invalid setup', tone: 'bad' }
+  else if (hasCritical) verdict = { label: 'Insecure', tone: 'bad' }
   else if (overall >= 90) verdict = { label: 'Well-architected', tone: 'good' }
   else if (overall >= 70) verdict = { label: 'Solid, with gaps', tone: 'warn' }
   else verdict = { label: 'Needs work', tone: 'warn' }
 
-  return { findings, securityScore, designScore, overall, verdict }
+  return { findings, correctnessScore, securityScore, designScore, overall, verdict, empty: false }
 }
 
 function clamp(v) {

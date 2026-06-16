@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Play, Pause, RotateCcw, Gauge, Cable, Trash2, Layers, X,
   Sparkles, ChevronDown, FolderOpen, Plus, Copy, Pencil, ShieldCheck, Zap, DollarSign, ArrowLeftRight,
+  LayoutGrid, TriangleAlert,
 } from 'lucide-react'
 import ArchitectureCanvas from '../components/cloud/ArchitectureCanvas.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
@@ -12,6 +13,7 @@ import {
 import { getComponent, providerName, CLOUD_PROVIDERS } from '../data/cloud/components.js'
 import { TEMPLATES, getTemplate } from '../data/cloud/templates.js'
 import { analyzeArchitecture } from '../lib/cloud/analyze.js'
+import { classifyEdge, PIPELINE_LANES } from '../lib/cloud/rules.js'
 import { buildSimulation, simulationTargets } from '../lib/cloud/simulate.js'
 import { runLoadTest, buildLoadFlow } from '../lib/cloud/loadtest.js'
 import { estimateCost } from '../lib/cloud/cost.js'
@@ -35,6 +37,8 @@ export default function CloudDesigner() {
   const [selected, setSelected] = useState(null) // { type, id }
   const [connectMode, setConnectMode] = useState(false)
   const [pendingSource, setPendingSource] = useState(null)
+  const [connectError, setConnectError] = useState(null) // blocked illegal wiring
+  const [showGuide, setShowGuide] = useState(false) // pipeline lane watermark
   const [highlightFinding, setHighlightFinding] = useState(null)
   const [rightTab, setRightTab] = useState('review') // review | load | cost
 
@@ -94,6 +98,13 @@ export default function CloudDesigner() {
     })
     save('cloudActiveDesign', activeId)
   }, [nodes, edges, activeId, provider])
+
+  // Auto-dismiss the "blocked connection" toast after a few seconds.
+  useEffect(() => {
+    if (!connectError) return
+    const t = setTimeout(() => setConnectError(null), 5000)
+    return () => clearTimeout(t)
+  }, [connectError])
 
   const analysis = useMemo(() => analyzeArchitecture({ nodes, edges }), [nodes, edges])
   const targets = useMemo(() => simulationTargets(nodes), [nodes])
@@ -169,25 +180,32 @@ export default function CloudDesigner() {
   // ── canvas interactions ──
   function onNodeClick(id) {
     if (connectMode) {
-      if (!pendingSource) setPendingSource(id)
+      if (!pendingSource) { setPendingSource(id); setConnectError(null) }
       else if (pendingSource === id) setPendingSource(null)
       else {
+        const source = nodes.find((n) => n.id === pendingSource)
+        const target = nodes.find((n) => n.id === id)
+        // Refuse illogical wiring outright — same rule the review + flow use.
+        const legal = classifyEdge(source, target)
+        if (legal.level === 'illegal') {
+          setConnectError(legal.reason); setPendingSource(null)
+          return
+        }
         const exists = edges.some((e) => e.from === pendingSource && e.to === id)
         if (!exists) {
-          const target = nodes.find((n) => n.id === id)
           const port = target?.ports?.[0] ?? 443
           resetSim(); resetLoad()
           setEdges((es) => [...es, { id: uid(), from: pendingSource, to: id, port }])
         }
-        setPendingSource(null)
+        setConnectError(null); setPendingSource(null)
       }
       return
     }
     setSelected({ type: 'node', id }); setHighlightFinding(null)
   }
   function onEdgeClick(id) { if (!connectMode) setSelected({ type: 'edge', id }) }
-  function onBackgroundClick() { setSelected(null); setPendingSource(null); setHighlightFinding(null) }
-  function toggleConnect() { setConnectMode((m) => !m); setPendingSource(null); setSelected(null) }
+  function onBackgroundClick() { setSelected(null); setPendingSource(null); setHighlightFinding(null); setConnectError(null) }
+  function toggleConnect() { setConnectMode((m) => !m); setPendingSource(null); setSelected(null); setConnectError(null) }
   function clearCanvas() { resetSim(); resetLoad(); setNodes([]); setEdges([]); setSelected(null) }
   function loadTemplate(id) {
     const t = getTemplate(id); if (!t) return
@@ -369,6 +387,13 @@ export default function CloudDesigner() {
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={() => setCompareOpen(true)} className="btn-outline text-xs" title="Compare AWS, Azure & GCP services"><ArrowLeftRight size={13} /> Compare</button>
+          <button
+            onClick={() => setShowGuide((g) => !g)}
+            className={`btn text-xs ${showGuide ? 'bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-500/40' : 'btn-outline'}`}
+            title="Show the recommended pipeline order: Web → Security → Load Balancer → Compute → Data"
+          >
+            <LayoutGrid size={13} /> Guide
+          </button>
           <button onClick={toggleConnect} className={`btn text-xs ${connectMode ? 'bg-cyan-500/20 text-cyan-300 ring-1 ring-cyan-500/40' : 'btn-outline'}`} title="Connect two components">
             <Cable size={14} /> {connectMode ? (pendingSource ? 'Pick target…' : 'Pick source…') : 'Connect'}
           </button>
@@ -407,13 +432,19 @@ export default function CloudDesigner() {
               <ArchitectureCanvas
                 nodes={nodes} edges={edges} selected={selected} highlightIds={highlightIds}
                 connectMode={connectMode} pendingSourceId={pendingSource}
+                guideLanes={showGuide ? PIPELINE_LANES : null}
                 sim={simActive ? { steps: simSteps, index: simIndex, progress: simProgress, status: simStatus, nodeStatus: simNodeStatus } : null}
                 onAddComponent={addComponent} onMoveNode={moveNode}
                 onNodeClick={onNodeClick} onEdgeClick={onEdgeClick} onBackgroundClick={onBackgroundClick}
               />
             </ErrorBoundary>
           </div>
-          {connectMode && (
+          {connectError ? (
+            <div className="absolute left-1/2 top-2 z-30 flex max-w-[92%] -translate-x-1/2 items-center gap-2 rounded-lg border border-rose-500/50 bg-rose-950/90 px-3 py-2 text-[11px] leading-snug text-rose-200 shadow-lg backdrop-blur">
+              <TriangleAlert size={14} className="shrink-0" />
+              <span><span className="font-semibold">Connection blocked.</span> {connectError}</span>
+            </div>
+          ) : connectMode && (
             <div className="pointer-events-none absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full border border-cyan-500/40 bg-zinc-950/90 px-3 py-1 text-[11px] text-cyan-300 backdrop-blur">
               {pendingSource ? 'Click the destination component' : 'Click the source component'}
             </div>
@@ -444,7 +475,7 @@ export default function CloudDesigner() {
             <div className="space-y-2 p-3">
               <select value={simTarget} onChange={(e) => { setSimTarget(e.target.value); resetSim() }}
                 className="w-full rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-indigo-500">
-                <option value="">Auto — deepest data tier</option>
+                <option value="">Auto — request endpoint (data tier)</option>
                 {targets.map((n) => <option key={n.id} value={n.id}>Target: {n.label || n.name}</option>)}
               </select>
               <div className="flex items-center gap-1.5">

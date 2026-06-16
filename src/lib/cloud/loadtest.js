@@ -37,8 +37,10 @@ function mainPath(nodes, edges) {
   const reachable = Object.keys(dist).filter((id) => id !== entry.id)
   if (!reachable.length) return null
   const data = reachable.filter((id) => byId[id].kind === 'database')
-  const pool = data.length ? data : reachable
-  const target = pool.sort((a, b) => dist[b] - dist[a])[0]
+  // Never treat pass-through infrastructure (NAT / LB / edge) as the endpoint.
+  const NON_ENDPOINT = ['internet', 'nat', 'dns', 'cdn', 'waf', 'lb', 'gateway', 'client', 'edge']
+  const pool = data.length ? data : reachable.filter((id) => !NON_ENDPOINT.includes(byId[id].kind))
+  const target = (pool.length ? pool : reachable).sort((a, b) => dist[b] - dist[a])[0]
   const path = [target]
   let cur = target
   while (prev[cur] !== undefined) {

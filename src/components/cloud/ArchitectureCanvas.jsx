@@ -43,6 +43,7 @@ export default function ArchitectureCanvas({
   onEdgeClick, // (edgeId)
   onBackgroundClick,
   renderNodeMeta, // optional (node) => JSX for the node's second line
+  guideLanes, // optional [{ label, hint }] — faint left→right pipeline watermark
   emptyHint = 'Drag components from the palette to start designing →',
 }) {
   const boardRef = useRef(null)
@@ -148,6 +149,26 @@ export default function ArchitectureCanvas({
         backgroundSize: '26px 26px',
       }}
     >
+      {/* Pipeline lane watermark — recommended left→right order to follow */}
+      {guideLanes?.length > 0 && (
+        <div className="pointer-events-none absolute inset-0 flex">
+          {guideLanes.map((lane, i) => (
+            <div
+              key={lane.label}
+              className="relative flex-1 border-r border-dashed border-zinc-700/30 last:border-r-0"
+            >
+              <div className="absolute inset-x-0 top-4 text-center">
+                <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-zinc-700/70">{lane.label}</p>
+                {lane.hint && <p className="mt-0.5 text-[9px] uppercase tracking-widest text-zinc-700/50">{lane.hint}</p>}
+              </div>
+              <div className="absolute inset-x-0 bottom-4 text-center text-[10px] font-semibold tracking-widest text-zinc-700/40">
+                {i + 1}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Connection + packet layer */}
       <svg width={BOARD_W} height={BOARD_H} className="absolute inset-0">
         <defs>
