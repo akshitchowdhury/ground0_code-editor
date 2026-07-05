@@ -2,5 +2,8 @@ node_modules
 dist
 .env
 .env.local
+.env.example
 *.log
 .DS_Store
+.ground0-pgdata/
+go-server/go-server

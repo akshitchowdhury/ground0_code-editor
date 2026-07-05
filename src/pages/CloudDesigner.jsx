@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft, Play, Pause, RotateCcw, Gauge, Cable, Trash2, Layers, X,
   Sparkles, ChevronDown, FolderOpen, Plus, Copy, Pencil, ShieldCheck, Zap, DollarSign, ArrowLeftRight,
-  LayoutGrid, TriangleAlert,
+  LayoutGrid, TriangleAlert, Wand2, Loader2,
 } from 'lucide-react'
 import ArchitectureCanvas from '../components/cloud/ArchitectureCanvas.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
@@ -12,12 +12,20 @@ import {
 } from '../components/cloud/StudioPanels.jsx'
 import { getComponent, providerName, CLOUD_PROVIDERS } from '../data/cloud/components.js'
 import { TEMPLATES, getTemplate } from '../data/cloud/templates.js'
-import { analyzeArchitecture } from '../lib/cloud/analyze.js'
 import { classifyEdge, PIPELINE_LANES } from '../lib/cloud/rules.js'
-import { buildSimulation, simulationTargets } from '../lib/cloud/simulate.js'
-import { runLoadTest, buildLoadFlow } from '../lib/cloud/loadtest.js'
-import { estimateCost } from '../lib/cloud/cost.js'
+import { simulationTargets } from '../lib/cloud/simulate.js'
+import { analyzeCloud, simulateCloud, loadTestCloud, loadFlowCloud, costCloud, generateCloud } from '../lib/studioApi.js'
 import { load, save } from '../lib/storage.js'
+
+// Analysis/simulate/loadtest/cost now run server-side (Go backend) — this is
+// the shape while a request is in flight or before the first one resolves;
+// classifyEdge/simulationTargets stay local (cheap, pure, needed for
+// instant connect-time UI feedback), everything scored/computed comes from
+// the API.
+const EMPTY_ANALYSIS = {
+  findings: [], correctnessScore: 0, securityScore: 0, designScore: 0, overall: 0,
+  verdict: { label: 'Analyzing…', tone: 'warn' }, empty: true,
+}
 
 const STEP_MS = 1500
 const uid = () => 'n_' + Math.random().toString(36).slice(2, 9)
@@ -31,6 +39,13 @@ export default function CloudDesigner() {
   const [tplOpen, setTplOpen] = useState(false)
   const [provider, setProvider] = useState('aws') // aws | azure | gcp
   const [compareOpen, setCompareOpen] = useState(false)
+
+  // AI: generate a starter design from a prompt.
+  const [genOpen, setGenOpen] = useState(false)
+  const [genPrompt, setGenPrompt] = useState('')
+  const [genBusy, setGenBusy] = useState(false)
+  const [genError, setGenError] = useState(null)
+  const [genNote, setGenNote] = useState(null)
 
   const [nodes, setNodes] = useState([])
   const [edges, setEdges] = useState([])
@@ -106,13 +121,47 @@ export default function CloudDesigner() {
     return () => clearTimeout(t)
   }, [connectError])
 
-  const analysis = useMemo(() => analyzeArchitecture({ nodes, edges }), [nodes, edges])
+  const [analysis, setAnalysis] = useState(EMPTY_ANALYSIS)
+  const [analysisError, setAnalysisError] = useState(null)
+  const [costProvisioned, setCostProvisioned] = useState({ items: [], total: 0 })
+  const [costAtLoad, setCostAtLoad] = useState(null)
   const targets = useMemo(() => simulationTargets(nodes), [nodes])
-  const costProvisioned = useMemo(() => estimateCost({ nodes }, { rps: 0 }), [nodes])
-  const costAtLoad = useMemo(
-    () => (loadResult?.ok ? estimateCost({ nodes }, { rps: loadResult.rps, instanceCounts: loadResult.instanceCounts }) : null),
-    [nodes, loadResult],
-  )
+
+  // Debounced server-side architecture review — recomputed on every graph
+  // edit (drag, add, connect…), so don't hit the backend on every keystroke-
+  // equivalent change. `cancelled` discards a stale in-flight response if
+  // the graph changes again before this one returns.
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(() => {
+      analyzeCloud(nodes, edges)
+        .then((result) => { if (!cancelled) { setAnalysis(result); setAnalysisError(null) } })
+        .catch((err) => { if (!cancelled) setAnalysisError(err.message) })
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [nodes, edges])
+
+  // Provisioned cost — same debounce.
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(() => {
+      costCloud(nodes, 0, {})
+        .then((result) => { if (!cancelled) setCostProvisioned(result) })
+        .catch(() => {})
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [nodes])
+
+  // Cost at the last load-test's traffic level — only recomputed when the
+  // load result itself changes (not on every edit).
+  useEffect(() => {
+    if (!loadResult?.ok) { setCostAtLoad(null); return }
+    let cancelled = false
+    costCloud(nodes, loadResult.rps, loadResult.instanceCounts)
+      .then((result) => { if (!cancelled) setCostAtLoad(result) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [nodes, loadResult])
 
   const highlightIds = useMemo(() => {
     if (!highlightFinding) return new Set()
@@ -175,6 +224,47 @@ export default function CloudDesigner() {
     resetSim(); resetLoad()
     setEdges((es) => es.filter((e) => e.id !== id))
     setSelected(null)
+  }
+
+  // ── AI: generate a starter design from a prompt ──
+  async function generateDesign() {
+    if (!genPrompt.trim() || genBusy) return
+    setGenBusy(true); setGenError(null); setGenNote(null)
+    try {
+      const design = await generateCloud(genPrompt.trim())
+      const refToId = {}
+      const newNodes = design.nodes
+        .map((gn) => {
+          const c = getComponent(gn.type, provider)
+          if (!c) return null
+          const id = uid()
+          refToId[gn.ref] = id
+          return {
+            id, type: c.id, kind: c.kind, name: c.name, icon: c.icon, x: gn.x, y: gn.y, provider,
+            tier: c.defaultTier, ports: [...(c.defaultPorts || [])], openToInternet: !!c.defaultOpenToInternet,
+            config: { ...(c.config || {}) },
+          }
+        })
+        .filter(Boolean)
+      const byId = Object.fromEntries(newNodes.map((n) => [n.id, n]))
+      const newEdges = design.edges
+        .map((ge) => {
+          const from = refToId[ge.from]
+          const to = refToId[ge.to]
+          if (!from || !to) return null
+          const port = byId[to]?.ports?.[0] ?? 443
+          return { id: uid(), from, to, port }
+        })
+        .filter(Boolean)
+      resetSim(); resetLoad()
+      setNodes(newNodes); setEdges(newEdges); setSelected(null); setSimTarget('')
+      setGenNote(`${design.source === 'ai' ? 'AI' : 'Template'}: ${design.note}`)
+      setGenPrompt('')
+    } catch (err) {
+      setGenError(err.message || 'Generation failed — try again.')
+    } finally {
+      setGenBusy(false)
+    }
   }
 
   // ── canvas interactions ──
@@ -254,16 +344,28 @@ export default function CloudDesigner() {
   }
 
   // ── packet-flow simulation ──
-  function play() {
-    const result = buildSimulation({ nodes, edges }, { targetId: simTarget || undefined })
+  async function play() {
+    let result
+    try {
+      result = await simulateCloud(nodes, edges, simTarget || undefined)
+    } catch (err) {
+      setSimSteps([]); setSimMeta({ ok: false, reason: err.message }); setSimStatus('error'); setSimKind('flow'); setSimNodeStatus(null)
+      return
+    }
     if (!result.steps.length) { setSimSteps([]); setSimMeta({ ok: false, reason: result.reason }); setSimStatus('error'); setSimKind('flow'); setSimNodeStatus(null); return }
     setSimKind('flow'); setSimNodeStatus(null)
     setSimSteps(result.steps); setSimMeta({ ok: result.ok, targetName: result.targetName, reason: null })
     setSimIndex(0); progressRef.current = 0; setSimProgress(0); setSimStatus('running'); setSelected(null)
   }
   // Play the load test as animated traffic on the design board.
-  function playLoadOnBoard() {
-    const flow = buildLoadFlow({ nodes, edges }, { rps: loadRps })
+  async function playLoadOnBoard() {
+    let flow
+    try {
+      flow = await loadFlowCloud(nodes, edges, loadRps)
+    } catch (err) {
+      setSimSteps([]); setSimMeta({ ok: false, reason: err.message }); setSimStatus('error'); setSimKind('load'); setSimNodeStatus(null)
+      return
+    }
     if (!flow.steps.length) { setSimSteps([]); setSimMeta({ ok: false, reason: flow.reason }); setSimStatus('error'); setSimKind('load'); setSimNodeStatus(null); return }
     setSimKind('load'); setSimNodeStatus(flow.nodeStatus)
     setSimSteps(flow.steps); setSimMeta({ ok: flow.ok, loadDone: flow.steps[flow.steps.length - 1]?.note, reason: null })
@@ -293,22 +395,26 @@ export default function CloudDesigner() {
   }, [simStatus, speed, simIndex, simSteps])
 
   // ── load test ──
-  function runLoad() {
+  async function runLoad() {
     setLoadRunning(true)
-    const result = runLoadTest({ nodes, edges }, { rps: loadRps })
-    setTimeout(() => {
+    try {
+      const result = await loadTestCloud(nodes, edges, loadRps)
       setLoadResult(result); setLoadRunning(false)
       if (result.ok) setCostMode('load')
-    }, 650)
+    } catch (err) {
+      setLoadResult({ ok: false, reason: err.message }); setLoadRunning(false)
+    }
   }
-  function applyFix(rec) {
+  async function applyFix(rec) {
     if (!rec.patch || !rec.nodeId) return
     const newNodes = nodes.map((n) => (n.id === rec.nodeId ? { ...n, ...rec.patch } : n))
     resetSim()
     setNodes(newNodes)
-    const result = runLoadTest({ nodes: newNodes, edges }, { rps: loadRps })
-    setLoadResult(result)
-    if (result.ok) setCostMode('load')
+    try {
+      const result = await loadTestCloud(newNodes, edges, loadRps)
+      setLoadResult(result)
+      if (result.ok) setCostMode('load')
+    } catch { /* keep previous loadResult on failure */ }
   }
 
   const simActive = simStatus !== 'idle' && simSteps.length > 0
@@ -386,6 +492,13 @@ export default function CloudDesigner() {
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => { setGenOpen((o) => !o); setGenError(null) }}
+            className={`btn text-xs ${genOpen ? 'bg-fuchsia-500/20 text-fuchsia-200 ring-1 ring-fuchsia-500/40' : 'btn-outline'}`}
+            title="Describe an app and let AI draft the architecture"
+          >
+            <Wand2 size={13} /> Generate
+          </button>
           <button onClick={() => setCompareOpen(true)} className="btn-outline text-xs" title="Compare AWS, Azure & GCP services"><ArrowLeftRight size={13} /> Compare</button>
           <button
             onClick={() => setShowGuide((g) => !g)}
@@ -439,6 +552,35 @@ export default function CloudDesigner() {
               />
             </ErrorBoundary>
           </div>
+          {/* AI generate prompt bar */}
+          {genOpen && (
+            <div className="absolute left-1/2 top-2 z-30 w-[min(94%,540px)] -translate-x-1/2 rounded-xl border border-fuchsia-500/40 bg-zinc-950/95 p-2.5 shadow-2xl backdrop-blur">
+              <div className="flex items-center gap-2">
+                <Wand2 size={15} className="shrink-0 text-fuchsia-300" />
+                <input
+                  value={genPrompt}
+                  onChange={(e) => setGenPrompt(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && generateDesign()}
+                  autoFocus
+                  placeholder="Describe an app — e.g. “a scalable image-sharing API with a cache”"
+                  className="min-w-0 flex-1 bg-transparent text-xs text-zinc-100 outline-none placeholder:text-zinc-600"
+                />
+                <button onClick={generateDesign} disabled={genBusy || !genPrompt.trim()} className="btn-primary shrink-0 gap-1.5 px-2.5 py-1 text-[11px]">
+                  {genBusy ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                  {genBusy ? 'Designing…' : 'Generate'}
+                </button>
+                <button onClick={() => setGenOpen(false)} className="shrink-0 text-zinc-500 hover:text-zinc-300"><X size={14} /></button>
+              </div>
+              {genError && <p className="mt-1.5 px-6 text-[11px] text-rose-300">{genError}</p>}
+              <p className="mt-1 px-6 text-[10px] text-zinc-600">Replaces the canvas with a starter design. Works without an API key (uses a matched template).</p>
+            </div>
+          )}
+          {genNote && !genOpen && (
+            <div className="absolute left-1/2 top-2 z-20 flex max-w-[92%] -translate-x-1/2 items-center gap-2 rounded-lg border border-fuchsia-500/30 bg-fuchsia-950/70 px-3 py-1.5 text-[11px] text-fuchsia-200 backdrop-blur">
+              <Sparkles size={13} className="shrink-0" /> {genNote}
+              <button onClick={() => setGenNote(null)} className="ml-1 text-fuchsia-400/70 hover:text-fuchsia-200"><X size={12} /></button>
+            </div>
+          )}
           {connectError ? (
             <div className="absolute left-1/2 top-2 z-30 flex max-w-[92%] -translate-x-1/2 items-center gap-2 rounded-lg border border-rose-500/50 bg-rose-950/90 px-3 py-2 text-[11px] leading-snug text-rose-200 shadow-lg backdrop-blur">
               <TriangleAlert size={14} className="shrink-0" />
@@ -514,6 +656,11 @@ export default function CloudDesigner() {
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Well-architected review</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${analysis.verdict.tone === 'good' ? 'bg-emerald-500/15 text-emerald-300' : analysis.verdict.tone === 'bad' ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300'}`}>{analysis.verdict.label}</span>
                 </div>
+                {analysisError && (
+                  <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
+                    Couldn't reach the analysis service — showing the last result.
+                  </p>
+                )}
                 <ReviewPanel analysis={analysis} highlightFinding={highlightFinding} onHighlight={setHighlightFinding} />
               </>
             )}

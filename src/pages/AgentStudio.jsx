@@ -10,15 +10,22 @@ import {
 } from '../components/cloud/AgentPanels.jsx'
 import { getAgentComponent, getBlueprint } from '../data/cloud/agentComponents.js'
 import { AGENT_TEMPLATES } from '../data/cloud/agentTemplates.js'
-import { analyzeAgent } from '../lib/agent/analyze.js'
 import { classifyAgentEdge } from '../lib/agent/rules.js'
-import { buildProfile } from '../lib/agent/profile.js'
-import { simulateAgent, FLOW_MODES, STAGE_LEGEND } from '../lib/agent/simulate.js'
+import { FLOW_MODES, STAGE_LEGEND } from '../lib/agent/simulate.js'
+import { analyzeAgent, simulateAgent, profileAgent } from '../lib/studioApi.js'
 import { load, save } from '../lib/storage.js'
 
 const STORAGE_KEY = 'agentDesign'
 const STEP_MS = 1500
 const uid = () => 'a_' + Math.random().toString(36).slice(2, 9)
+
+// Analysis/simulate/profile now run server-side (Go backend) — this is the
+// shape while a request is in flight or before the first one resolves.
+const EMPTY_ANALYSIS = {
+  findings: [], correctnessScore: 0, safetyScore: 0, designScore: 0, overall: 0,
+  verdict: { label: 'Analyzing…', tone: 'warn' }, empty: true,
+}
+const EMPTY_PROFILE = { empty: true, archetype: '', summary: '' }
 
 export default function AgentStudio() {
   const [nodes, setNodes] = useState([])
@@ -67,8 +74,31 @@ export default function AgentStudio() {
     return () => clearTimeout(t)
   }, [connectError])
 
-  const analysis = useMemo(() => analyzeAgent({ nodes, edges, blueprintId }), [nodes, edges, blueprintId])
-  const profile = useMemo(() => buildProfile({ nodes }), [nodes])
+  const [analysis, setAnalysis] = useState(EMPTY_ANALYSIS)
+  const [analysisError, setAnalysisError] = useState(null)
+  const [profile, setProfile] = useState(EMPTY_PROFILE)
+
+  // Debounced server-side review — recomputed on every graph edit.
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(() => {
+      analyzeAgent(nodes, edges, blueprintId)
+        .then((result) => { if (!cancelled) { setAnalysis(result); setAnalysisError(null) } })
+        .catch((err) => { if (!cancelled) setAnalysisError(err.message) })
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [nodes, edges, blueprintId])
+
+  useEffect(() => {
+    let cancelled = false
+    const t = setTimeout(() => {
+      profileAgent(nodes)
+        .then((result) => { if (!cancelled) setProfile(result) })
+        .catch(() => {})
+    }, 200)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [nodes])
+
   const highlightIds = useMemo(() => {
     if (!highlightFinding) return new Set()
     const f = analysis.findings.find((x) => x.id === highlightFinding)
@@ -138,8 +168,14 @@ export default function AgentStudio() {
   const pickBlueprint = (bpId) => loadTemplate(getBlueprint(bpId)?.template)
 
   // simulation control
-  function play() {
-    const result = simulateAgent({ nodes, edges }, { mode: simMode })
+  async function play() {
+    let result
+    try {
+      result = await simulateAgent(nodes, edges, simMode)
+    } catch (err) {
+      setSimSteps([]); setSimMeta({ reason: err.message }); setSimStatus('error')
+      return
+    }
     if (!result.steps.length) { setSimSteps([]); setSimMeta({ reason: result.reason }); setSimStatus('error'); return }
     setSimSteps(result.steps); setSimMeta({ ok: result.ok, reason: null })
     setSimIndex(0); progressRef.current = 0; setSimProgress(0); setSimStatus('running'); setSelected(null)
@@ -307,6 +343,11 @@ export default function AgentStudio() {
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Design review</span>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${analysis.verdict.tone === 'good' ? 'bg-emerald-500/15 text-emerald-300' : analysis.verdict.tone === 'bad' ? 'bg-rose-500/15 text-rose-300' : 'bg-amber-500/15 text-amber-300'}`}>{analysis.verdict.label}</span>
                 </div>
+                {analysisError && (
+                  <p className="border-b border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] text-amber-300">
+                    Couldn't reach the analysis service — showing the last result.
+                  </p>
+                )}
                 <ReviewPanel analysis={analysis} highlightFinding={highlightFinding} onHighlight={setHighlightFinding} />
               </>
             )}

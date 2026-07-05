@@ -1,99 +1,79 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { load, save, remove } from '../lib/storage.js'
+import { fetchMe, apiLogin, apiRegister, apiLogout } from '../lib/api.js'
 
-// Firebase activates only when VITE_FIREBASE_* env vars are present.
-// Otherwise the app runs in "demo auth" mode: sign-in is simulated locally
-// so the whole UI flow works without any backend setup.
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-}
-
-const firebaseEnabled = Boolean(firebaseConfig.apiKey && firebaseConfig.authDomain)
-
+// Auth is backed by the Go backend's custom auth service (session cookie,
+// /api/auth/*) as of Phase 3 — Firebase is gone. Two kinds of user:
+//   * real accounts (email/password or Google/GitHub OAuth): hydrated from
+//     GET /api/auth/me via the HttpOnly session cookie
+//   * guest: a purely local account in localStorage, no backend row — the
+//     app works fully offline with it (progress/designs stay on-device)
 const AuthContext = createContext(null)
+
+// Map the backend's user shape onto what the UI components expect.
+const toUiUser = (u) => ({
+  id: u.id,
+  name: u.name || u.email,
+  email: u.email,
+  photo: u.photoURL || null,
+  provider: 'account',
+})
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    if (!firebaseEnabled) {
-      setUser(load('demoUser'))
-      setReady(true)
-      return
-    }
-    let unsubscribe = () => {}
     let cancelled = false
-    // Lazy-load firebase so it never touches the bundle's critical path.
-    Promise.all([import('firebase/app'), import('firebase/auth')]).then(
-      ([{ initializeApp, getApps }, { getAuth, onAuthStateChanged }]) => {
-        if (cancelled) return
-        const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig)
-        unsubscribe = onAuthStateChanged(getAuth(app), (u) => {
-          setUser(
-            u
-              ? {
-                  name: u.displayName || u.email,
-                  email: u.email,
-                  photo: u.photoURL,
-                  provider: u.providerData[0]?.providerId || 'firebase',
-                }
-              : null,
-          )
-          setReady(true)
-        })
-      },
-    )
+    // A real session (cookie) wins; otherwise fall back to a saved guest.
+    fetchMe()
+      .then((u) => {
+        if (!cancelled) setUser(toUiUser(u))
+      })
+      .catch(() => {
+        if (!cancelled) setUser(load('demoUser'))
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true)
+      })
     return () => {
       cancelled = true
-      unsubscribe()
     }
   }, [])
 
   async function signIn(provider) {
-    // Guest is always a local-only account, independent of Firebase.
+    // Guest stays a local-only account — no backend involvement at all.
     if (provider === 'guest') {
       const guestUser = { name: 'Guest', email: 'guest@ground0.dev', photo: null, provider: 'guest', guest: true, demo: true }
       save('demoUser', guestUser)
       setUser(guestUser)
       return
     }
-    if (!firebaseEnabled) {
-      const demoUser = {
-        name: provider === 'github' ? 'Octocat (demo)' : 'Demo Learner',
-        email: 'demo@ground0.dev',
-        photo: null,
-        provider: `${provider} (demo)`,
-        demo: true,
-      }
-      save('demoUser', demoUser)
-      setUser(demoUser)
-      return
-    }
-    const [{ getApps }, auth] = await Promise.all([import('firebase/app'), import('firebase/auth')])
-    const { getAuth, signInWithPopup, GoogleAuthProvider, GithubAuthProvider } = auth
-    const p = provider === 'github' ? new GithubAuthProvider() : new GoogleAuthProvider()
-    await signInWithPopup(getAuth(getApps()[0]), p)
+    // OAuth needs a top-level navigation (consent screen redirect), not a
+    // fetch — the Go backend sets the session cookie on the way back.
+    window.location.href = `/api/auth/oauth/${provider}/start`
+  }
+
+  async function signInWithPassword(email, password) {
+    const u = await apiLogin(email, password)
+    remove('demoUser')
+    setUser(toUiUser(u))
+  }
+
+  async function register(email, password, name) {
+    const u = await apiRegister(email, password, name)
+    remove('demoUser')
+    setUser(toUiUser(u))
   }
 
   async function signOut() {
-    if (!firebaseEnabled) {
-      remove('demoUser')
-      setUser(null)
-      return
-    }
-    const [{ getApps }, { getAuth, signOut: fbSignOut }] = await Promise.all([
-      import('firebase/app'),
-      import('firebase/auth'),
-    ])
-    await fbSignOut(getAuth(getApps()[0]))
+    if (!user?.guest) await apiLogout()
+    remove('demoUser')
+    setUser(null)
   }
 
   return (
-    <AuthContext.Provider value={{ user, ready, signIn, signOut, firebaseEnabled }}>
+    <AuthContext.Provider value={{ user, ready, signIn, signInWithPassword, register, signOut }}>
       {children}
     </AuthContext.Provider>
   )

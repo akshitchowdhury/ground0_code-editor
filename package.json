@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "goserver": "cd go-server && go run ./cmd/server",
     "server": "node server/index.js",
     "server:watch": "node --watch server/index.js"
   },
@@ -17,7 +18,6 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "firebase": "^11.1.0",
     "lucide-react": "^0.469.0",
     "pg": "^8.21.0",
     "react": "^18.3.1",

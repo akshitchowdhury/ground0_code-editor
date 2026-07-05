@@ -14,11 +14,13 @@ import {
   History,
   AlertTriangle,
   RotateCcw,
+  Wand2,
+  Lightbulb,
 } from 'lucide-react'
 import { EXAM_CATALOG } from '../data/cloud/modules.js'
 import { ACCENTS } from '../data/tracks.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getUserId, fetchHealth, startExam, submitExam, fetchExamHistory } from '../lib/api.js'
+import { fetchHealth, startExam, submitExam, fetchExamHistory, fetchStudyPlan } from '../lib/api.js'
 
 const LETTERS = ['A', 'B', 'C', 'D']
 
@@ -53,11 +55,11 @@ function ScoreRing({ pct }) {
 
 export default function ExamLab() {
   const { user } = useAuth()
-  const userId = getUserId(user)
 
   const [phase, setPhase] = useState('pick') // pick | loading | running | submitting | results
   const [health, setHealth] = useState(undefined) // undefined=checking, null=offline
   const [history, setHistory] = useState([])
+  const [studyPlan, setStudyPlan] = useState(null)
   const [error, setError] = useState(null)
 
   const [examType, setExamType] = useState('ccp')
@@ -70,14 +72,15 @@ export default function ExamLab() {
 
   useEffect(() => {
     fetchHealth().then(setHealth)
-    fetchExamHistory(userId).then((h) => h && setHistory(h))
-  }, [userId])
+    fetchExamHistory().then((h) => h && setHistory(h))
+    fetchStudyPlan().then((p) => p && setStudyPlan(p))
+  }, [user])
 
   async function begin() {
     setError(null)
     setPhase('loading')
     try {
-      const data = await startExam(userId, examType, count)
+      const data = await startExam(examType, count)
       setSession(data)
       setAnswers({})
       setQIndex(0)
@@ -95,7 +98,8 @@ export default function ExamLab() {
       const data = await submitExam(session.sessionId, answers)
       setResults(data)
       setPhase('results')
-      fetchExamHistory(userId).then((h) => h && setHistory(h))
+      fetchExamHistory().then((h) => h && setHistory(h))
+      fetchStudyPlan().then((p) => p && setStudyPlan(p))
     } catch (err) {
       setError(err.message)
       setPhase('running')
@@ -141,7 +145,7 @@ export default function ExamLab() {
               <div>
                 <p className="font-semibold">The exam backend isn’t running.</p>
                 <p className="mt-1 text-amber-200/80">
-                  Start it with <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-xs">npm run server</code>{' '}
+                  Start it with <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-xs">npm run goserver</code>{' '}
                   in the project folder, then refresh. (Optional: set <code className="rounded bg-zinc-900 px-1.5 py-0.5 font-mono text-xs">ANTHROPIC_API_KEY</code>{' '}
                   in .env for AI-generated questions.)
                 </p>
@@ -219,6 +223,54 @@ export default function ExamLab() {
                 ? 'Claude is writing fresh questions for you — this can take up to a minute.'
                 : 'Preparing questions from the offline bank…'}
             </p>
+          )}
+
+          {/* Adaptive study plan */}
+          {studyPlan && !studyPlan.empty && (
+            <div className="fade-up mt-12">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold tracking-widest text-zinc-500 uppercase">
+                <Wand2 size={14} className="text-fuchsia-400" /> Your study plan
+                <span className="rounded-full bg-fuchsia-500/15 px-2 py-0.5 text-[9px] font-medium normal-case tracking-normal text-fuchsia-300">
+                  {studyPlan.source === 'ai' ? 'AI-personalised' : 'from your results'}
+                </span>
+              </h3>
+              <div className="rounded-2xl border border-fuchsia-500/20 bg-gradient-to-br from-fuchsia-500/[0.07] to-transparent p-4">
+                <p className="text-sm leading-relaxed text-zinc-200">{studyPlan.summary}</p>
+
+                {studyPlan.focus?.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300/80">
+                      <Target size={12} /> Focus next
+                    </p>
+                    {studyPlan.focus.map((s, i) => (
+                      <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                        <div className="flex items-start gap-2">
+                          <Lightbulb size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                          <div>
+                            <p className="text-sm font-semibold text-white">{s.topic}</p>
+                            <p className="mt-0.5 text-xs text-zinc-500">{s.why}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-zinc-300">{s.action}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {studyPlan.strengths?.length > 0 && (
+                  <div className="mt-4">
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">
+                      <CheckCircle2 size={12} /> Strengths
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {studyPlan.strengths.map((s, i) => (
+                        <span key={i} className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] text-emerald-200">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {/* History */}

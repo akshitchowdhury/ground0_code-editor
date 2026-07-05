@@ -8,7 +8,7 @@ import { getCloudLessons } from '../data/cloud/index.js'
 import { ACCENTS } from '../data/tracks.js'
 import { load, save } from '../lib/storage.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getUserId, syncCloudProgress } from '../lib/api.js'
+import { syncCloudProgress } from '../lib/api.js'
 
 function CardsBoard({ cards, accent }) {
   return (
@@ -62,7 +62,7 @@ export default function CloudTopicPlayer() {
     const updated = { ...progress, [moduleId]: updatedIds }
     setProgress(updated)
     save('cloudProgress', updated)
-    syncCloudProgress(getUserId(user), moduleId, updatedIds)
+    syncCloudProgress(moduleId, updatedIds)
     if (lessonIndex < lessons.length - 1) goToLesson(lessonIndex + 1)
   }
 

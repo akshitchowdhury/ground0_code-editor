@@ -38,7 +38,7 @@ data/ = the catalogs & templates (what blocks exist, starter designs)
 ```bash
 npm install
 npm run dev          # Vite dev server (the whole front end; studios + sandbox work offline)
-npm run server       # OPTIONAL Express backend on :4000 — only the Cloud lessons/Exam Lab use it
+npm run goserver     # OPTIONAL Go backend on :4100 — only the Cloud lessons/Exam Lab use it
 ```
 Vite proxies `/api/*` to the backend. Everything except the Exam Lab works with the front end alone.
 
@@ -105,11 +105,11 @@ src/
     CloudHome / CloudTopicPlayer / ExamLab
     CloudDesigner.jsx           ★ Architecture Studio page (orchestrator)
     AgentStudio.jsx             ★ Agentic Studio page (orchestrator)
-server/                        ← BACKEND (see §6)
-  index.js                      Express API (progress + exams)
-  db.js                         Postgres or in-memory store
-  ai.js                         Anthropic SDK (exam questions + feedback)
-  exams.js                      exam catalog + offline question bank
+go-server/                     ← BACKEND (see §6), Go module
+  cmd/server/main.go            entry point: wires config/db/cache/router
+  internal/progress/            progress API + Postgres/in-memory store
+  internal/exams/               exam API, catalog, offline bank, Anthropic client
+  internal/db/migrations/       SQL schema
 ```
 ★ = the files you'll most often edit.
 
@@ -235,15 +235,20 @@ CSS 3D transforms), and **`Watermark3D.jsx`** (landing wordmark).
 
 ## 6. Backend — what's integrated, what's missing
 
-The backend is a small **Express** app (`npm run server`, port 4000; Vite proxies `/api`).
-It exists for **exactly two things in the Cloud learning track**: lesson **progress** and the **Exam Lab**.
+The active backend is a **Go** app (`go-server/`, `npm run goserver` or `cd go-server && go run ./cmd/server`,
+port 4100; Vite proxies `/api` here) — a from-scratch port of the original Express server, same routes and
+JSON shapes, plus (as of Phase 2+) the design-studio logic and (Phase 3+) auth. It exists for
+**exactly two things in the Cloud learning track** in Phase 1: lesson **progress** and the **Exam Lab**.
+The original Express server (`server/`, `npm run server`, port 4000) is kept in the repo temporarily for
+comparison/rollback during the migration — Vite no longer proxies to it by default, but it still works
+standalone against the same env vars/DB. It will be deleted once the Go backend has been used for a while.
 
 | File | What it does |
 |---|---|
-| `server/index.js` | Routes: `GET /api/health`; `GET/PUT /api/progress` (learning progress); `POST /api/exams` (start — AI questions, falls back to bank); `POST /api/exams/:id/submit` (grade + feedback); `GET /api/exams` (history). |
-| `server/db.js` | Storage: **Postgres** when `DATABASE_URL` is set + reachable, else an automatic **in-memory** fallback (zero setup; resets on restart). Tables: `cloud_progress`, `exam_sessions`. |
-| `server/ai.js` | **Anthropic SDK** (`claude-opus-4-8`, adaptive thinking, JSON-schema structured outputs) generates exam questions + personalized feedback. Falls back to a **heuristic** when `ANTHROPIC_API_KEY` is unset. |
-| `server/exams.js` | The exam catalog (`EXAM_TYPES`) + an **offline question bank** (`sampleQuestions`) used when AI is off. |
+| `go-server/cmd/server/main.go` | Wires config, DB/cache, router; routes: `GET /api/health`; `GET/PUT /api/progress`; `POST /api/exams` (start — AI questions, falls back to bank); `POST /api/exams/:id/submit` (grade + feedback); `GET /api/exams` (history). |
+| `go-server/internal/progress/repo.go` | Storage: **Postgres** when `DATABASE_URL` is set + reachable, else an automatic **in-memory** fallback (zero setup; resets on restart). Tables: `cloud_progress`, `exam_sessions` (`go-server/internal/db/migrations/`). |
+| `go-server/internal/exams/ai.go` | Raw-HTTP Anthropic client (`claude-opus-4-8`, adaptive thinking, JSON-schema structured outputs) — no official Go SDK exists, so this calls the Messages API directly. Generates exam questions + personalized feedback. Falls back to a **heuristic** when `ANTHROPIC_API_KEY` is unset. |
+| `go-server/internal/exams/catalog.go` / `bank.go` | The exam catalog (`ExamTypes`) + an **offline question bank** (`SampleQuestions`) used when AI is off. |
 | `src/lib/api.js` (front end) | Fail-soft client: progress is **localStorage-first** with fire-and-forget sync; only the Exam Lab hard-requires the server. |
 
 ### ✅ Integrated & working
@@ -326,6 +331,6 @@ shell → *terminal | editor*). Used by **`Playground.jsx`** (Project Mode) and 
 | Studio **panels / inspectors** | `StudioPanels.jsx` / `AgentPanels.jsx` |
 | Studio **page wiring / state / tabs** | `pages/CloudDesigner.jsx` / `pages/AgentStudio.jsx` |
 | A **code runner** | `src/lib/runners/*` |
-| The **backend API / exams / DB** | `server/*` |
+| The **backend API / exams / DB** | `go-server/internal/*` |
 | **Routes / auth gate** | `src/App.jsx`, `context/AuthContext.jsx` |
 | A **lesson** (cloud or language) | `src/data/cloud/lessons/*` / `src/data/tutorials/*` |

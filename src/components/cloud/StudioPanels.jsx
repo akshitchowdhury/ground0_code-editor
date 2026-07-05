@@ -13,6 +13,7 @@ import {
   COMPUTE_TYPE_OPTIONS, DB_CLASS_OPTIONS, CACHE_TYPE_OPTIONS, INSTANCE_TYPES,
   TRAFFIC_PRESETS, fmtUsd, fmtRps,
 } from '../../lib/cloud/specs.js'
+import FindingFixIt from './FindingFixIt.jsx'
 
 // ───────────────────────── shared controls ─────────────────────────
 // Literal class strings (Tailwind v4 only generates classes it can see whole).
@@ -251,6 +252,12 @@ export function ReviewPanel({ analysis, highlightFinding, onHighlight }) {
                       </div>
                     </div>
                   </button>
+                  {/* Outside the finding <button> — nesting buttons is invalid HTML. */}
+                  {open && (
+                    <div className="mt-1.5 pl-6">
+                      <FindingFixIt finding={f} studio="cloud" />
+                    </div>
+                  )}
                 </li>
               )
             })}

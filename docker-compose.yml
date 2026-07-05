@@ -1,0 +1,36 @@
+# Ground0: local dev infra for the Go backend migration — Postgres + Redis.
+# App processes (go-server, the old Express server during transition, Vite)
+# run natively (go run / npm run server / npm run dev), not in containers,
+# for fast iteration.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ground0
+      POSTGRES_PASSWORD: ground0
+      POSTGRES_DB: ground0
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ground0 -d ground0']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:

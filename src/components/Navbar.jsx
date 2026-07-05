@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Code2, GraduationCap, FlaskConical, Cloud, LogOut, User, BrainCircuit } from 'lucide-react'
+import { Code2, GraduationCap, FlaskConical, LogOut, BrainCircuit } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
-import AuthModal from './AuthModal.jsx'
 
 function NavItem({ to, icon: Icon, children }) {
   return (
@@ -22,7 +21,6 @@ function NavItem({ to, icon: Icon, children }) {
 
 export default function Navbar() {
   const { user, signOut } = useAuth()
-  const [authOpen, setAuthOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -70,7 +68,7 @@ export default function Navbar() {
                 <div className="px-3 py-2">
                   <p className="truncate text-sm font-medium text-white">{user.name}</p>
                   <p className="truncate text-xs text-zinc-500">{user.email}</p>
-                  {user.demo && <p className="mt-1 text-[11px] text-amber-400">Demo session (no Firebase keys set)</p>}
+                  {user.guest && <p className="mt-1 text-[11px] text-amber-400">Guest session — data stays on this device</p>}
                 </div>
                 <button
                   onClick={() => {
@@ -84,14 +82,8 @@ export default function Navbar() {
               </div>
             )}
           </>
-        ) : (
-          <button onClick={() => setAuthOpen(true)} className="btn-outline">
-            <User size={14} /> Sign in
-          </button>
-        )}
+        ) : null}
       </div>
-
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </header>
   )
 }

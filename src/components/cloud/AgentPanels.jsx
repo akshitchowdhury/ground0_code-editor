@@ -6,6 +6,7 @@ import {
 } from '../../data/cloud/agentComponents.js'
 import { FINDING_STYLES, CATEGORY_LABELS } from '../../lib/agent/analyze.js'
 import { BUILD_STEPS } from '../../lib/agent/rules.js'
+import FindingFixIt from './FindingFixIt.jsx'
 
 // ── shared controls ──
 const ACCENT_CLASS = { emerald: 'accent-emerald-500', rose: 'accent-rose-500' }
@@ -219,6 +220,12 @@ export function ReviewPanel({ analysis, highlightFinding, onHighlight }) {
                       </div>
                     </div>
                   </button>
+                  {/* Outside the finding <button> — nesting buttons is invalid HTML. */}
+                  {open && (
+                    <div className="mt-1.5 pl-6">
+                      <FindingFixIt finding={f} studio="agent" />
+                    </div>
+                  )}
                 </li>
               )
             })}

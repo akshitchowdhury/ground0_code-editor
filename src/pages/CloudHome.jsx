@@ -6,7 +6,7 @@ import { getCloudLessons } from '../data/cloud/index.js'
 import { ACCENTS } from '../data/tracks.js'
 import { load, save } from '../lib/storage.js'
 import { useAuth } from '../context/AuthContext.jsx'
-import { getUserId, fetchCloudProgress } from '../lib/api.js'
+import { fetchCloudProgress } from '../lib/api.js'
 
 export default function CloudHome() {
   const { user } = useAuth()
@@ -15,7 +15,7 @@ export default function CloudHome() {
   // Merge any server-side progress (when the backend is running) with local.
   useEffect(() => {
     let cancelled = false
-    fetchCloudProgress(getUserId(user)).then((remote) => {
+    fetchCloudProgress().then((remote) => {
       if (cancelled || !remote) return
       setProgress((local) => {
         const merged = { ...local }
