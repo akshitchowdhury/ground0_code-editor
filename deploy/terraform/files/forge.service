@@ -1,0 +1,24 @@
+[Unit]
+Description=DevAshura Forge - Go API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=forge
+Group=forge
+WorkingDirectory=/opt/forge
+EnvironmentFile=/etc/forge/forge.env
+ExecStart=/opt/forge/goserver
+Restart=always
+RestartSec=5
+
+# Hardening — the server keeps no local state (all data is in RDS).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/forge
+
+[Install]
+WantedBy=multi-user.target

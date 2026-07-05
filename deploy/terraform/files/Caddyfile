@@ -1,0 +1,17 @@
+# Serves the built SPA and reverse-proxies /api to the Go server on :4100.
+# Same-origin, so the session cookie just works. FORGE_DOMAIN is injected from
+# /etc/forge/deploy.conf (see the caddy.service override). Caddy provisions and
+# renews the HTTPS certificate automatically via Let's Encrypt.
+{$FORGE_DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:4100
+	}
+
+	handle {
+		root * /var/www/forge
+		try_files {path} /index.html
+		file_server
+	}
+}

@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+# The domain you'll register / already own (this becomes the Route53 zone).
+root_domain = "example.com"
+
+# Serve on the apex ("") or a subdomain, e.g. "app" -> app.example.com.
+app_subdomain = ""
+
+# Region (us-east-1 recommended for free tier + simplicity).
+region = "us-east-1"
+
+# --- OAuth (optional) ---
+# Client IDs are not secret. The matching secrets go in SSM (see README),
+# not here. Leave empty to disable that provider.
+google_client_id = ""
+github_client_id = ""
+
+# --- SSH (optional) ---
+# Leave unset to disable SSH entirely and use SSM Session Manager instead.
+# ssh_allowed_cidr = "203.0.113.4/32"
+# key_name         = "my-ec2-keypair"

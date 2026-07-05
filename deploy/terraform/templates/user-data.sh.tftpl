@@ -1,0 +1,55 @@
+#!/bin/bash
+# First-boot provisioning for the Forge app instance. Installs Caddy + AWS CLI,
+# lays down the systemd unit / Caddyfile / deploy script, then runs the first
+# deploy (a no-op until a build is pushed). Logs to /var/log/forge-userdata.log.
+set -eux
+exec > /var/log/forge-userdata.log 2>&1
+export DEBIAN_FRONTEND=noninteractive
+
+# --- runtime config consumed by forge-deploy + caddy ---
+mkdir -p /etc/forge
+cat > /etc/forge/deploy.conf <<'CONF'
+REGION=${region}
+ARTIFACTS_BUCKET=${bucket}
+SSM_PATH=${ssm_path}
+FORGE_DOMAIN=${app_domain}
+CONF
+
+# --- service account + directories ---
+useradd --system --home /opt/forge --shell /usr/sbin/nologin forge || true
+mkdir -p /opt/forge /var/www/forge
+chown -R forge:forge /opt/forge /var/www/forge
+
+# --- base packages ---
+apt-get update -y
+apt-get install -y curl jq unzip gpg debian-keyring debian-archive-keyring apt-transport-https
+
+# --- AWS CLI v2 ---
+curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+unzip -q /tmp/awscliv2.zip -d /tmp
+/tmp/aws/install --update
+
+# --- Caddy (official apt repo) ---
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' > /etc/apt/sources.list.d/caddy-stable.list
+apt-get update -y
+apt-get install -y caddy
+
+# --- lay down the templated files (base64 from terraform) ---
+echo '${forge_deploy_b64}' | base64 -d > /usr/local/bin/forge-deploy
+chmod +x /usr/local/bin/forge-deploy
+echo '${forge_service_b64}' | base64 -d > /etc/systemd/system/forge.service
+echo '${caddyfile_b64}' | base64 -d > /etc/caddy/Caddyfile
+
+# Caddy reads FORGE_DOMAIN from deploy.conf.
+mkdir -p /etc/systemd/system/caddy.service.d
+cat > /etc/systemd/system/caddy.service.d/override.conf <<'OVERRIDE'
+[Service]
+EnvironmentFile=/etc/forge/deploy.conf
+OVERRIDE
+
+# --- start everything ---
+systemctl daemon-reload
+systemctl enable forge
+/usr/local/bin/forge-deploy || true
+systemctl restart caddy || true
