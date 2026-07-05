@@ -327,3 +327,41 @@ body {
     animation: none;
   }
 }
+
+/* ===== Login screen tri-theme skin (Deva purple × Ashura crimson × Φ) ===== */
+
+/* Black gradient bed with purple + crimson neon bleed from the corners. */
+.forge-stage {
+  background-color: #05030a;
+  background-image:
+    radial-gradient(ellipse 70% 60% at 12% 8%, rgb(168 85 247 / 0.22), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 90% 92%, rgb(244 63 94 / 0.2), transparent 60%),
+    radial-gradient(ellipse 90% 70% at 50% 120%, rgb(232 121 249 / 0.1), transparent 60%),
+    linear-gradient(155deg, #0a0510 0%, #05030a 45%, #0b0408 100%);
+}
+
+/* Tri-theme primary button — purple→crimson neon gradient with a glow. */
+.btn-forge {
+  background-image: linear-gradient(120deg, #7c3aed 0%, #a855f7 35%, #e879f9 55%, #f43f5e 100%);
+  background-size: 180% 100%;
+  background-position: 0% 50%;
+  color: #fff;
+  box-shadow:
+    0 0 18px rgb(168 85 247 / 0.35),
+    0 0 24px rgb(244 63 94 / 0.2);
+  transition: background-position 0.5s ease, box-shadow 0.3s ease, filter 0.3s ease;
+}
+.btn-forge:hover:not(:disabled) {
+  background-position: 100% 50%;
+  box-shadow:
+    0 0 24px rgb(168 85 247 / 0.5),
+    0 0 32px rgb(244 63 94 / 0.35);
+  filter: brightness(1.05);
+}
+
+/* Focus ring in Φ-fuchsia for the login inputs. */
+.input-forge:focus {
+  border-color: #e879f9;
+  box-shadow: 0 0 0 1px rgb(232 121 249 / 0.4), 0 0 14px rgb(232 121 249 / 0.18);
+}
+

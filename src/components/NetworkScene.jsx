@@ -35,32 +35,51 @@ const PACKETS = [
   [9, 4, 4.0, 1.1], [0, 6, 5.0, 2.8], [3, 4, 4.5, 0.2], [0, 1, 5.0, 1.9],
 ].map(([a, b, dur, begin]) => ({ path: edgePath(a, b), dur, begin }))
 
+// Tri-theme palette: Deva purple + Ashura crimson alternating across the
+// constellation, with the central hub as the fuchsia Φ balance point.
+const DEVA = '#a855f7'
+const ASHURA = '#f43f5e'
+const PHI = '#e879f9'
+const nodeColor = (n, i) => (n.hub ? PHI : i % 2 ? ASHURA : DEVA)
+// Each node wears its realm's glyph: Φ at the central hub, Α on the crimson
+// (Ashura) nodes, Δ on the purple (Deva) nodes.
+const nodeGlyph = (n, i) => (n.hub ? 'Φ' : i % 2 ? 'Α' : 'Δ')
+
 function Net({ animated }) {
   return (
     <svg viewBox="0 0 560 560" className="h-full w-full overflow-visible">
       <defs>
-        <radialGradient id="net-node" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#67e8f9" stopOpacity="0.9" />
-          <stop offset="100%" stopColor="#22d3ee" stopOpacity="0" />
+        <radialGradient id="net-node-deva" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#c084fc" stopOpacity="0.9" />
+          <stop offset="100%" stopColor={DEVA} stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="net-node-ashura" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fb7185" stopOpacity="0.9" />
+          <stop offset="100%" stopColor={ASHURA} stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="net-node-phi" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#f0abfc" stopOpacity="0.95" />
+          <stop offset="100%" stopColor={PHI} stopOpacity="0" />
         </radialGradient>
         <filter id="net-glow" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3.5" />
         </filter>
       </defs>
 
-      {/* Edges */}
+      {/* Edges — hub spokes glow fuchsia; the rest alternate the two realms */}
       {EDGES.map(([a, b], i) => (
         <line
           key={i}
           x1={NODES[a].x} y1={NODES[a].y} x2={NODES[b].x} y2={NODES[b].y}
-          stroke="#22d3ee" strokeWidth="1.1" opacity={a === 0 || b === 0 ? 0.3 : 0.16}
+          stroke={a === 0 || b === 0 ? PHI : i % 2 ? ASHURA : DEVA}
+          strokeWidth="1.1" opacity={a === 0 || b === 0 ? 0.32 : 0.18}
         />
       ))}
 
-      {/* Travelling packets (front layer only) */}
+      {/* Travelling packets (front layer only) — purple and crimson data */}
       {animated &&
         PACKETS.map((p, i) => (
-          <circle key={i} r="3.4" fill="#a5f3fc" filter="url(#net-glow)">
+          <circle key={i} r="3.4" fill={i % 2 ? '#fda4af' : '#d8b4fe'} filter="url(#net-glow)">
             <animateMotion dur={`${p.dur}s`} begin={`${p.begin}s`} repeatCount="indefinite" path={p.path} />
           </circle>
         ))}
@@ -68,14 +87,29 @@ function Net({ animated }) {
       {/* Nodes */}
       {NODES.map((n, i) => (
         <g key={i}>
-          <circle cx={n.x} cy={n.y} r={n.r * 2.6} fill="url(#net-node)" opacity={animated ? 0.45 : 0.22}>
+          <circle
+            cx={n.x} cy={n.y} r={n.r * 2.6}
+            fill={n.hub ? 'url(#net-node-phi)' : i % 2 ? 'url(#net-node-ashura)' : 'url(#net-node-deva)'}
+            opacity={animated ? 0.45 : 0.22}
+          >
             {animated && (
               <animate attributeName="opacity" values="0.2;0.55;0.2" dur="3.6s" begin={`${i * 0.4}s`} repeatCount="indefinite" />
             )}
           </circle>
-          <circle cx={n.x} cy={n.y} r={n.r} fill={n.hub ? '#67e8f9' : '#22d3ee'} />
+          <circle cx={n.x} cy={n.y} r={n.r} fill={nodeColor(n, i)} />
+          {/* Realm glyph riding on the node — Δ (Deva), Α (Ashura), Φ (hub) */}
+          <text
+            x={n.x} y={n.y}
+            textAnchor="middle" dominantBaseline="central"
+            fontFamily="Orbitron, sans-serif" fontWeight="700"
+            fontSize={n.hub ? n.r * 1.5 : n.r * 1.9}
+            fill="#fff" opacity={n.hub ? 0.95 : 0.9}
+            style={{ pointerEvents: 'none' }}
+          >
+            {nodeGlyph(n, i)}
+          </text>
           {n.hub && (
-            <circle cx={n.x} cy={n.y} r={n.r + 6} fill="none" stroke="#22d3ee" strokeWidth="1.5" opacity="0.55">
+            <circle cx={n.x} cy={n.y} r={n.r + 6} fill="none" stroke={PHI} strokeWidth="1.5" opacity="0.55">
               {animated && <animate attributeName="r" values={`${n.r + 4};${n.r + 14};${n.r + 4}`} dur="4s" repeatCount="indefinite" />}
             </circle>
           )}
@@ -117,10 +151,10 @@ export default function NetworkScene() {
 
   return (
     <div className="net-stage relative h-full w-full overflow-hidden">
-      {/* Ambient depth blobs */}
-      <div aria-hidden className="pointer-events-none absolute -left-16 top-8 h-72 w-72 rounded-full bg-indigo-600/20 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute -right-12 bottom-0 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl" />
-      <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-violet-600/15 blur-3xl" />
+      {/* Ambient depth blobs — Deva purple, Ashura crimson, Φ fuchsia */}
+      <div aria-hidden className="pointer-events-none absolute -left-16 top-8 h-72 w-72 rounded-full bg-purple-600/25 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute -right-12 bottom-0 h-80 w-80 rounded-full bg-rose-500/20 blur-3xl" />
+      <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/3 h-64 w-64 -translate-x-1/2 rounded-full bg-fuchsia-600/15 blur-3xl" />
 
       {/* 3D network */}
       <div ref={tiltRef} className="net-tilt absolute inset-0">
@@ -134,7 +168,7 @@ export default function NetworkScene() {
       {/* Wordmark + symbol overlay */}
       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 px-8 text-center">
         <div aria-hidden className="absolute left-1/2 top-1/2 h-64 w-64 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-950/55 blur-2xl" />
-        <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg shadow-indigo-950/50">
+        <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 via-fuchsia-500 to-rose-500 shadow-lg shadow-purple-950/60">
           <Code2 size={28} className="text-white" />
         </span>
         <div className="relative">

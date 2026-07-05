@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { BookOpenText, Flame, DraftingCompass, ArrowRight, Zap, ShieldCheck, WifiOff } from 'lucide-react'
+import { BookOpenText, Flame, DraftingCompass, ArrowRight, Zap, ShieldCheck, WifiOff, Code2, GraduationCap, Workflow } from 'lucide-react'
 import { TRACKS, ACCENTS } from '../data/tracks.js'
 import Watermark3D from '../components/Watermark3D.jsx'
 
@@ -86,26 +86,58 @@ export default function Landing() {
           </Link>
         </div>
 
-        {/* Tracks */}
+        {/* Capabilities — the three studios inside the forge */}
         <div className="fade-up mt-16" style={{ animationDelay: '0.3s' }}>
           <h3 className="mb-4 text-center text-sm font-semibold tracking-widest text-zinc-500 uppercase">
-            Six tracks, one workspace
+            One forge, three studios
           </h3>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {TRACKS.map((track) => {
-              const accent = ACCENTS[track.accent]
-              return (
-                <div key={track.id} className={`panel border p-4 ${accent.border}`}>
-                  <span
-                    className={`mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg font-mono text-sm font-bold ${accent.bg} ${accent.text}`}
-                  >
-                    {track.badge}
-                  </span>
-                  <p className="font-semibold text-white">{track.name}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">{track.tagline}</p>
-                </div>
-              )
-            })}
+          <div className="grid gap-3 sm:grid-cols-3">
+            {/* Learning Paths — Deva */}
+            <div className="panel border border-violet-500/20 p-5">
+              <span className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10 text-violet-300">
+                <GraduationCap size={18} />
+              </span>
+              <p className="font-semibold text-white">Learning Paths</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Guided, level-by-level tracks with an AI mentor and mock exams that target your weak spots.
+              </p>
+            </div>
+
+            {/* Code Studio — Ashura */}
+            <div className="panel border border-rose-500/20 p-5">
+              <span className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-rose-500/10 text-rose-300">
+                <Code2 size={18} />
+              </span>
+              <p className="font-semibold text-white">Code Studio</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Write and run real code with live output — sandboxed in your browser or a cloud runner.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {TRACKS.map((track) => {
+                  const accent = ACCENTS[track.accent]
+                  return (
+                    <span
+                      key={track.id}
+                      title={track.name}
+                      className={`inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 font-mono text-[11px] font-bold ${accent.bg} ${accent.text}`}
+                    >
+                      {track.badge}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Design Studio — Φ */}
+            <div className="panel border border-fuchsia-500/20 p-5">
+              <span className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-fuchsia-500/10 text-fuchsia-300">
+                <Workflow size={18} />
+              </span>
+              <p className="font-semibold text-white">Design Studio</p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+                Architect cloud systems and LLM-agent pipelines on a live canvas — reviewed, simulated and priced.
+              </p>
+            </div>
           </div>
         </div>
 

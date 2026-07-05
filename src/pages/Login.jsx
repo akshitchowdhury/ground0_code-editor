@@ -39,7 +39,7 @@ function OAuthButton({ icon, label, enabled, onClick }) {
 }
 
 const inputClass =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-indigo-500'
+  'input-forge w-full rounded-lg border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition-shadow'
 
 export default function Login() {
   const { user, signIn, signInWithPassword, register } = useAuth()
@@ -130,15 +130,15 @@ export default function Login() {
   const formTitle = { signin: 'Sign in', register: 'Create account', forgot: 'Send reset link', reset: 'Set new password' }[mode]
 
   return (
-    <div className="flex h-full w-full flex-col bg-zinc-950 lg:flex-row">
-      {/* Left — 3D network animation */}
-      <div className="relative h-56 shrink-0 overflow-hidden border-b border-zinc-800/80 sm:h-72 lg:h-auto lg:flex-1 lg:border-b-0 lg:border-r">
+    <div className="forge-stage relative flex h-full w-full flex-col lg:flex-row">
+      {/* Left — 3D network glyph model over the tri-theme skin */}
+      <div className="relative h-56 shrink-0 overflow-hidden border-b border-purple-500/15 sm:h-72 lg:h-auto lg:flex-1 lg:border-b-0 lg:border-r lg:border-r-rose-500/15">
         <NetworkScene />
       </div>
 
-      {/* Right — login card */}
-      <div className="flex w-full flex-1 items-center justify-center overflow-y-auto p-6 lg:w-[460px] lg:flex-none lg:p-10">
-        <div className="fade-up w-full max-w-sm">
+      {/* Right — login card, floating over faint Δ / Α / Φ watermarks */}
+      <div className="relative flex w-full flex-1 items-center justify-center overflow-y-auto p-6 lg:w-[460px] lg:flex-none lg:p-10">
+        <div className="fade-up relative z-10 w-full max-w-sm">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-white">
               Welcome to <span className="deva-neon">Δ</span>.<span className="ashura-neon">Α</span>.<span className="phi-neon">Φ</span>orge
@@ -168,7 +168,7 @@ export default function Login() {
                   placeholder="New password (min 8 characters)" className={`${inputClass} pl-9`} autoFocus
                 />
               </div>
-              <button type="submit" disabled={busy !== null} className="btn-primary w-full justify-center gap-2 py-2.5 text-sm">
+              <button type="submit" disabled={busy !== null} className="btn btn-forge w-full justify-center gap-2 py-2.5 text-sm">
                 {busy === 'reset' ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
                 <span className="font-semibold">Set new password</span>
               </button>
@@ -202,7 +202,7 @@ export default function Login() {
                       />
                     </div>
                   )}
-                  <button type="submit" disabled={busy !== null} className="btn-primary w-full justify-center gap-2 py-2.5 text-sm">
+                  <button type="submit" disabled={busy !== null} className="btn btn-forge w-full justify-center gap-2 py-2.5 text-sm">
                     {busy === 'form' ? <Loader2 size={16} className="animate-spin" /> : <Lock size={15} />}
                     <span className="font-semibold">{formTitle}</span>
                   </button>
@@ -210,7 +210,7 @@ export default function Login() {
                     {mode === 'signin' ? (
                       <>
                         <button type="button" onClick={() => { setMode('register'); setError(null) }} className="text-zinc-400 hover:text-zinc-200">
-                          New here? <span className="text-indigo-400">Create an account</span>
+                          New here? <span className="text-fuchsia-400">Create an account</span>
                         </button>
                         <button type="button" onClick={() => { setMode('forgot'); setError(null) }} className="text-zinc-500 hover:text-zinc-300">
                           Forgot password?
@@ -247,7 +247,7 @@ export default function Login() {
               <button
                 onClick={continueAsGuest}
                 disabled={busy !== null}
-                className="btn group mt-5 w-full justify-center gap-2 border border-zinc-700 bg-zinc-900 py-2.5 text-sm text-zinc-200 hover:border-zinc-500"
+                className="btn group mt-5 w-full justify-center gap-2 border border-zinc-700 bg-zinc-900/80 py-2.5 text-sm text-zinc-200 transition-colors hover:border-fuchsia-500/60 hover:text-white"
               >
                 {busy === 'guest' ? <Loader2 size={16} className="animate-spin" /> : <UserRound size={16} />}
                 <span className="font-semibold">{busy === 'guest' ? 'Entering…' : 'Continue as guest'}</span>

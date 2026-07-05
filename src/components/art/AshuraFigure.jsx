@@ -15,6 +15,7 @@ const C = {
 
 export default function AshuraFigure({ className = '', animated = true }) {
   const cx = 220
+  const haloCy = 220 // rotation centre of the spiked flame halo
   return (
     <svg viewBox="0 0 440 520" className={className} aria-hidden="true">
       <defs>
@@ -35,7 +36,9 @@ export default function AshuraFigure({ className = '', animated = true }) {
       {/* Heat bloom */}
       <ellipse cx={cx} cy={230} rx="195" ry="215" fill="url(#ashura-heat)" />
 
-      {/* Flame halo — spiked tongues of fire, flickering out of phase */}
+      {/* Flame halo — spiked tongues of fire, flickering out of phase and
+          slowly wheeling: the outer star turns one way, the inner the other,
+          so the whole mandala rotates like a slow burning sun. */}
       <g fill="none" strokeLinecap="round" strokeLinejoin="round">
         <path
           d={`M${cx},46
@@ -47,6 +50,7 @@ export default function AshuraFigure({ className = '', animated = true }) {
               L${cx - 98},100 L${cx - 58},122 L${cx - 54},64 L${cx - 26},92 Z`}
           stroke={C.glow} strokeWidth="1.6" opacity="0.5"
         >
+          {animated && <animateTransform attributeName="transform" type="rotate" from={`0 ${cx} ${haloCy}`} to={`360 ${cx} ${haloCy}`} dur="100s" repeatCount="indefinite" />}
           {animated && <animate attributeName="opacity" values="0.32;0.62;0.42;0.58;0.32" dur="3.8s" repeatCount="indefinite" />}
         </path>
         <path
@@ -58,6 +62,7 @@ export default function AshuraFigure({ className = '', animated = true }) {
               L${cx - 44},156 L${cx - 42},112 L${cx - 18},126 Z`}
           stroke={C.ember} strokeWidth="1.3" opacity="0.5"
         >
+          {animated && <animateTransform attributeName="transform" type="rotate" from={`360 ${cx} ${haloCy}`} to={`0 ${cx} ${haloCy}`} dur="76s" repeatCount="indefinite" />}
           {animated && <animate attributeName="opacity" values="0.6;0.3;0.55;0.35;0.6" dur="2.9s" repeatCount="indefinite" />}
         </path>
       </g>
