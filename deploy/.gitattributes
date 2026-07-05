@@ -1,0 +1,6 @@
+# These run on Linux (EC2 / cloud-init). Force LF so a Windows checkout or
+# editor never rewrites them to CRLF, which would break bash on the box.
+*.sh          text eol=lf
+*.tftpl       text eol=lf
+Caddyfile     text eol=lf
+forge.service text eol=lf
