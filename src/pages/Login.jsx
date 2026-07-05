@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Github, Loader2, UserRound, ArrowRight, Lock, Mail, KeyRound, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 import { fetchAuthProviders, apiForgotPassword, apiResetPassword } from '../lib/api.js'
@@ -41,7 +42,9 @@ const inputClass =
   'w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-indigo-500'
 
 export default function Login() {
-  const { signIn, signInWithPassword, register } = useAuth()
+  const { user, signIn, signInWithPassword, register } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
   const [busy, setBusy] = useState(null) // 'guest' | 'form' | 'reset' | null
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
@@ -68,6 +71,13 @@ export default function Login() {
     if (authError) setError(authError)
     if (token || authError) window.history.replaceState({}, '', window.location.pathname)
   }, [])
+
+  // Once signed in (email/password, guest, or an OAuth round-trip that landed
+  // us here already authenticated), leave the login page for wherever the user
+  // was originally headed — defaulting to home.
+  useEffect(() => {
+    if (user) navigate(location.state?.from?.pathname || '/', { replace: true })
+  }, [user, navigate, location.state])
 
   async function continueAsGuest() {
     setBusy('guest')

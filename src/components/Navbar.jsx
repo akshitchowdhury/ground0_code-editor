@@ -62,6 +62,11 @@ export default function Navbar() {
                 </span>
               )}
               <span className="hidden max-w-36 truncate md:inline">{user.name}</span>
+              {user.guest && (
+                <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400">
+                  Guest
+                </span>
+              )}
             </button>
             {menuOpen && (
               <div className="absolute right-0 mt-2 w-52 rounded-xl border border-zinc-800 bg-zinc-900 p-1.5 shadow-2xl">

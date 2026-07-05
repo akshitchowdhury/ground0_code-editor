@@ -253,7 +253,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email, frontendURL string)
 	if err := s.repo.CreateResetToken(ctx, user.ID, hash, time.Now().Add(resetTokenTTL)); err != nil {
 		return nil
 	}
-	link := strings.TrimRight(frontendURL, "/") + "/?resetToken=" + raw
+	link := strings.TrimRight(frontendURL, "/") + "/login?resetToken=" + raw
 	s.mailer.SendPasswordReset(ctx, user.Email, link)
 	return nil
 }

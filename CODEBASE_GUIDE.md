@@ -37,10 +37,12 @@ data/ = the catalogs & templates (what blocks exist, starter designs)
 ### Run it
 ```bash
 npm install
-npm run dev          # Vite dev server (the whole front end; studios + sandbox work offline)
-npm run goserver     # OPTIONAL Go backend on :4100 — only the Cloud lessons/Exam Lab use it
+npm run dev          # Vite dev server (front end)
+npm run goserver     # Go backend on :4100 (accounts, exams, AI, server-side studio analysis)
 ```
-Vite proxies `/api/*` to the backend. Everything except the Exam Lab works with the front end alone.
+Vite proxies `/api/*` to the backend. The **code sandbox** runs fully offline. The **studios' canvas**
+(drag/drop + instant connection legality) also works offline, but their **review/load/cost/AI panels
+call the backend** now (see §6) — so `goserver` is no longer optional for the full studio/exam/auth experience.
 
 ---
 
@@ -51,10 +53,11 @@ src/
   main.jsx                      App entry → BrowserRouter > AuthProvider > App
   App.jsx                       Auth gate + all routes (see §2)
   index.css                     Tailwind v4 + shared classes (.panel, .btn-*, animations)
-  context/AuthContext.jsx       Firebase (env-gated) OR local guest/demo auth
+  context/AuthContext.jsx       Custom Go-auth session (cookie) OR local guest account
   lib/
     storage.js                  localStorage wrapper (prefix "ground0.")
-    api.js                      fail-soft client for the backend (progress + exams)
+    api.js                      fail-soft client for the backend (auth + progress + exams)
+    studioApi.js                client for the server-side studio endpoints (/api/studio/*)
     runners/                    ← CODE SANDBOX engines (see §5)
       jsRunner.js               JavaScript in a sandboxed iframe
       pythonRunner.js           Python via Pyodide (WASM)
@@ -90,6 +93,7 @@ src/
     cloud/ArchitectureCanvas.jsx ★ the shared drag/drop SVG canvas (both studios)
     cloud/StudioPanels.jsx      Architecture Studio panels (palette/inspector/review/cost/load/compare)
     cloud/AgentPanels.jsx       Agentic Studio panels (palette/inspector/review/profile/blueprint)
+    cloud/FindingFixIt.jsx      "Suggest a fix" expander on a review finding (AI, both studios)
     ErrorBoundary.jsx           wraps the canvas so a render error can't blank the page
     FlowBoard.jsx               read-only animated diagram engine for the *lessons*
     CodeWorkspace.jsx           ← code sandbox orchestrator (editor + runner + output)
@@ -97,7 +101,7 @@ src/
     ConsolePanel / Terminal / ReactPreviewFrame / SplitPane   IO + layout
     NetworkScene.jsx            login-screen 3D network animation (SVG + SMIL + CSS 3D)
     Watermark3D.jsx             landing-page 3D wordmark
-    Navbar / AuthModal / LessonContent
+    Navbar / LessonContent      (AuthModal was removed — the app is login-gated, so there's no modal)
   pages/
     Landing / Login
     Playground.jsx              Project Mode (free sandbox)
@@ -106,10 +110,16 @@ src/
     CloudDesigner.jsx           ★ Architecture Studio page (orchestrator)
     AgentStudio.jsx             ★ Agentic Studio page (orchestrator)
 go-server/                     ← BACKEND (see §6), Go module
-  cmd/server/main.go            entry point: wires config/db/cache/router
+  cmd/server/main.go            entry point: wires config → db/cache → LLM client → all route groups
+  internal/auth/                accounts, sessions, Google/GitHub OAuth, password reset
   internal/progress/            progress API + Postgres/in-memory store
-  internal/exams/               exam API, catalog, offline bank, Anthropic client
-  internal/db/migrations/       SQL schema
+  internal/exams/               exam API, catalog, offline bank, AI questions/feedback, study plan
+  internal/studio/cloud/        server-side Architecture Studio engine (analyze/simulate/loadtest/cost/generate)
+  internal/studio/agent/        server-side Agentic Studio engine (analyze/simulate/profile)
+  internal/studio/fix/          AI "suggest a fix" endpoint (shared by both studios)
+  internal/llm/                 provider-agnostic LLM client (Gemini → Groq → Anthropic)
+  internal/cache/               Redis OR in-process KV cache (studio catalog, OAuth state, sessions)
+  internal/db/migrations/       SQL schema (runs automatically on startup)
 ```
 ★ = the files you'll most often edit.
 
@@ -117,23 +127,32 @@ go-server/                     ← BACKEND (see §6), Go module
 
 ## 2. Routing & the shell (how pages connect)
 
-`src/App.jsx` is the map. It first **gates on auth** (`useAuth()`): not signed in → renders
-`<Login/>`; otherwise renders the `<Navbar/>` + routes:
+`src/App.jsx` is the map. It's **real React Router now** (not a conditional render): a public
+`/login` route plus a **`ProtectedLayout`** route (renders `<Navbar/>` + `<Outlet/>`) that wraps every
+app route. `ProtectedLayout` redirects to `/login` when there's no `user` — passing the intended
+location in router `state` so `Login` can send you back there after sign-in. `*` → `/`.
 
-| Route | Page | Area |
-|---|---|---|
-| `/` | `Landing` | marketing |
-| `/playground` | `Playground` | Code Sandbox (Project Mode) |
-| `/learn`, `/learn/:trackId` | `LearnHome`, `TutorialPlayer` | Code Sandbox (Guided) |
-| `/cloud` | `CloudHome` | Cloud hub |
-| `/cloud/:moduleId` | `CloudTopicPlayer` | Cloud lessons (FlowBoard) |
-| `/cloud/exam` | `ExamLab` | Exam Lab (uses backend) |
-| `/cloud/designer` | **`CloudDesigner`** | **Architecture Studio** |
-| `/cloud/agent-studio` | **`AgentStudio`** | **Agentic Studio** |
+| Route | Page | Area | Access |
+|---|---|---|---|
+| `/login` | `Login` | Auth | **public** |
+| `/` | `Landing` | marketing | protected |
+| `/playground` | `Playground` | Code Sandbox (Project Mode) | protected |
+| `/learn`, `/learn/:trackId` | `LearnHome`, `TutorialPlayer` | Code Sandbox (Guided) | protected |
+| `/cloud` | `CloudHome` | Cloud hub | protected |
+| `/cloud/:moduleId` | `CloudTopicPlayer` | Cloud lessons (FlowBoard) | protected |
+| `/cloud/exam` | `ExamLab` | Exam Lab (uses backend) | protected |
+| `/cloud/designer` | **`CloudDesigner`** | **Architecture Studio** | protected |
+| `/cloud/agent-studio` | **`AgentStudio`** | **Agentic Studio** | protected |
 
-Auth lives in `context/AuthContext.jsx`: if `VITE_FIREBASE_*` env vars exist it uses Firebase;
-otherwise a **local guest/demo** account (saved to localStorage). **There is no server-side auth**
-— the backend trusts whatever `userId` the client sends (see §6 "what's missing").
+Auth lives in `context/AuthContext.jsx`. Two kinds of user:
+- **Real accounts** — email/password or Google/GitHub OAuth, hydrated from `GET /api/auth/me` via an
+  HttpOnly session cookie. This is a **custom Go auth service** (§6) — **Firebase was removed**.
+- **Guest** — a purely local account in `localStorage` (`ground0.demoUser`), no backend row; the app
+  works fully offline with it. The Navbar shows a **"Guest" tag** to keep it visually separate.
+
+`AuthProvider` shows a splash while it restores the session (`fetchMe`, falling back to a saved guest),
+then flips `ready` so the router renders. **Server-side auth is real now** — the backend derives the
+user from the session cookie and never trusts a client-supplied id (contrast the old Express behaviour).
 
 ---
 
@@ -143,6 +162,14 @@ otherwise a **local guest/demo** account (saved to localStorage). **There is no 
 
 There are **two** rule layers, both pure functions, plus supporting engines. They all read
 the same node/edge graph.
+
+> **Where they run now:** the heavy engines (`analyze`/`simulate`/`loadtest`/`cost`/`generate`) were
+> ported to Go and the studio pages call them over `/api/studio/cloud/*` via `src/lib/studioApi.js`.
+> The `src/lib/cloud/*.js` files below are the **canonical reference** (the Go port mirrors them
+> line-for-line) and are still imported by the UI for **cheap/instant bits**: `rules.js` `classifyEdge`
+> (connection legality — must be sub-frame, so it stays local), `simulate.js` `simulationTargets`, and
+> styling/label constants (`FINDING_STYLES`, `CATEGORY_LABELS`) + `specs.js` dropdown tables. Edit a rule
+> in **both** the JS file (reference/UI) and its Go twin (`go-server/internal/studio/cloud/`) to keep them in sync.
 
 ### 3a. The files (in priority order)
 
@@ -160,15 +187,18 @@ the same node/edge graph.
 
 ```
 CloudDesigner.jsx (state: nodes, edges)
-   │  useMemo → analyzeArchitecture({nodes, edges})        ... lib/cloud/analyze.js
-   │                 └─ for each edge: classifyEdge(...)   ... lib/cloud/rules.js
-   │  useMemo → estimateCost(...)                          ... lib/cloud/cost.js
-   │  on "Play"      → buildSimulation(...)                ... lib/cloud/simulate.js
-   │  on "Run/Play load" → runLoadTest / buildLoadFlow     ... lib/cloud/loadtest.js → specs.js
+   │  on connect (instant, LOCAL) → classifyEdge(...)          ... lib/cloud/rules.js
+   │  debounced effect → analyzeCloud(nodes, edges)  ─┐
+   │  debounced effect → costCloud(...)               │  studioApi.js → POST /api/studio/cloud/*
+   │  on "Play"         → simulateCloud(...)           ├─▶ Go: internal/studio/cloud/*  (the live compute)
+   │  on "Run/Play load"→ loadTestCloud/loadFlowCloud ─┘
+   │  on "Generate"     → generateCloud(prompt)          ... AI (or template fallback)
    ▼
-StudioPanels.jsx  (ReviewPanel renders findings, CostPanel, LoadTestPanel)
+StudioPanels.jsx  (ReviewPanel renders findings, CostPanel, LoadTestPanel; FindingFixIt → POST /api/studio/fix)
 ArchitectureCanvas.jsx (animates the steps; colours overloaded tiers red)
 ```
+(The async calls are debounced ~200ms with a stale-response guard; on backend failure the panels keep
+their last-good state. `classifyEdge` stays local so connection feedback is instant.)
 
 ### 3c. "I want to…" (Architecture Studio)
 - **Add/change a best-practice rule** → `src/lib/cloud/analyze.js` (copy an existing `add(level, category, title, detail, nodeIds)` block).
@@ -197,9 +227,11 @@ Same two-layer shape as the cloud studio, but the domain is LLM-agent pipelines.
 | `src/pages/AgentStudio.jsx` | Orchestrator (state, blueprint picker, run, tabs). | — |
 | `src/components/cloud/AgentPanels.jsx` | Palette, NodeInspector, ReviewPanel, ProfilePanel, BlueprintPicker, `agentNodeMeta`. | — |
 
-**Data flow** mirrors §3b: `AgentStudio.jsx` holds `{nodes, edges, blueprintId}`, calls
-`analyzeAgent` + `buildProfile` in `useMemo`, calls `simulateAgent` on Run, and renders via
-`AgentPanels.jsx` over the shared `ArchitectureCanvas.jsx`.
+**Data flow** mirrors §3b (and the same "runs on the server now" note applies): `AgentStudio.jsx`
+holds `{nodes, edges, blueprintId}`, calls `analyzeAgent` + `profileAgent` + `simulateAgent` over
+`/api/studio/agent/*` via `studioApi.js` (Go: `internal/studio/agent/`), keeps `classifyAgentEdge`
+local for instant connect-time validation, and renders via `AgentPanels.jsx` (with `FindingFixIt`)
+over the shared `ArchitectureCanvas.jsx`. The `src/lib/agent/*.js` files remain the reference twins.
 
 ### "I want to…" (Agentic Studio)
 - **Add an agent rule** → `src/lib/agent/analyze.js`.
@@ -235,36 +267,50 @@ CSS 3D transforms), and **`Watermark3D.jsx`** (landing wordmark).
 
 ## 6. Backend — what's integrated, what's missing
 
-The active backend is a **Go** app (`go-server/`, `npm run goserver` or `cd go-server && go run ./cmd/server`,
-port 4100; Vite proxies `/api` here) — a from-scratch port of the original Express server, same routes and
-JSON shapes, plus (as of Phase 2+) the design-studio logic and (Phase 3+) auth. It exists for
-**exactly two things in the Cloud learning track** in Phase 1: lesson **progress** and the **Exam Lab**.
-The original Express server (`server/`, `npm run server`, port 4000) is kept in the repo temporarily for
-comparison/rollback during the migration — Vite no longer proxies to it by default, but it still works
-standalone against the same env vars/DB. It will be deleted once the Go backend has been used for a while.
+The backend is a **Go** app (`go-server/`, `npm run goserver` or `cd go-server && go run ./cmd/server`,
+port 4100; Vite proxies `/api` here). It started as a from-scratch port of the original Express server
+(same routes/JSON shapes) and grew through three phases into the full backend: **Phase 1** progress +
+exams, **Phase 2** the design-studio engines + caching, **Phase 3** custom auth. On top of that sits the
+shared **LLM client** and the AI features. The old Express server (`server/`, `npm run server`, port 4000)
+is kept for rollback only — nothing proxies to it; it's safe to delete once the Go backend has soaked.
 
-| File | What it does |
-|---|---|
-| `go-server/cmd/server/main.go` | Wires config, DB/cache, router; routes: `GET /api/health`; `GET/PUT /api/progress`; `POST /api/exams` (start — AI questions, falls back to bank); `POST /api/exams/:id/submit` (grade + feedback); `GET /api/exams` (history). |
-| `go-server/internal/progress/repo.go` | Storage: **Postgres** when `DATABASE_URL` is set + reachable, else an automatic **in-memory** fallback (zero setup; resets on restart). Tables: `cloud_progress`, `exam_sessions` (`go-server/internal/db/migrations/`). |
-| `go-server/internal/exams/ai.go` | Raw-HTTP Anthropic client (`claude-opus-4-8`, adaptive thinking, JSON-schema structured outputs) — no official Go SDK exists, so this calls the Messages API directly. Generates exam questions + personalized feedback. Falls back to a **heuristic** when `ANTHROPIC_API_KEY` is unset. |
-| `go-server/internal/exams/catalog.go` / `bank.go` | The exam catalog (`ExamTypes`) + an **offline question bank** (`SampleQuestions`) used when AI is off. |
-| `src/lib/api.js` (front end) | Fail-soft client: progress is **localStorage-first** with fire-and-forget sync; only the Exam Lab hard-requires the server. |
+`cmd/server/main.go` wires everything: `config.Load()` → Postgres pool (or nil → in-memory stores) →
+Redis (or in-process cache) → one shared `llm.Client` → then mounts every route group on a chi router
+with `authSvc.WithUser` resolving the session cookie on each request.
+
+| Package | What it does | Routes |
+|---|---|---|
+| `internal/auth/` | **Custom auth** — bcrypt passwords, opaque SHA-256 session tokens (HttpOnly cookie), Google/GitHub OAuth (`x/oauth2`, CSRF state in the KV cache), single-use password-reset tokens, Resend-or-console mailer. `WithUser`/`RequireUser` middleware. | `/api/auth/{register,login,logout,me,providers}`, `/api/auth/password/{forgot,reset}`, `/api/auth/oauth/{provider}/{start,callback}` |
+| `internal/progress/` | Lesson progress. **Postgres** when `DATABASE_URL` is reachable, else automatic **in-memory** fallback. `RequireUser` — the user comes from the session, never the client. | `GET/PUT /api/progress` |
+| `internal/exams/` | Exam catalog + **offline question bank** + AI question generation, grading, feedback, and the **adaptive study plan** (re-grades stored attempts to find weak domains). | `POST /api/exams`, `POST /api/exams/{id}/submit`, `GET /api/exams`, `GET /api/exams/studyplan` |
+| `internal/studio/cloud/` | **Server-side Architecture Studio engine** — the Go twin of `src/lib/cloud/*` (analyze/simulate/loadtest/cost) plus NL→design `generate`. Catalog/specs read through the cache. | `POST /api/studio/cloud/{analyze,simulate,loadtest,loadflow,cost,generate}`, `GET /api/studio/cloud/specs` |
+| `internal/studio/agent/` | **Server-side Agentic Studio engine** — Go twin of `src/lib/agent/*` (analyze/simulate/profile). | `POST /api/studio/agent/{analyze,simulate,profile}`, `GET /api/studio/agent/specs` |
+| `internal/studio/fix/` | AI **"suggest a fix"** for a review finding (curated static library fallback). Shared by both studios. | `POST /api/studio/fix` |
+| `internal/llm/` | Provider-agnostic JSON LLM client with a **free-first chain: Gemini → Groq → Anthropic**. `nil` when no keys are set, so every caller falls back to its offline path. | — |
+| `internal/cache/` | A `KV` interface backed by **Redis** or an **in-process** map (catalog/specs, OAuth state, session cache). | — |
+| `internal/db/migrations/` | SQL schema (progress/exams, studio catalog, auth tables, uuid backfill) — runs automatically on boot, idempotent DDL. | — |
+
+Front-end clients: `src/lib/api.js` (fail-soft — progress is localStorage-first with fire-and-forget
+sync; auth/exams surface errors) and `src/lib/studioApi.js` (studio endpoints — **not** fail-soft, since
+their result *is* the panel content; callers keep last-good state on failure).
 
 ### ✅ Integrated & working
-- Mock Exam Lab end-to-end (AI or offline): start → grade → strengths/areas/next-steps feedback → history.
-- Cloud lesson progress sync (local-first, merges server state when present).
-- Graceful degradation everywhere (no DB key → memory; no AI key → bank/heuristics; no server → local).
+- **Real auth**: email/password + Google/GitHub OAuth + guest, session cookies, password reset. Progress
+  and exam history are access-controlled by the session (guests get local-only / empty history).
+- **Exam Lab** end-to-end (AI or offline): start → grade → feedback → history → adaptive study plan.
+- **Both design studios compute on the server** (analyze/simulate/loadtest/cost/profile), plus the three
+  AI features (NL→architecture, fix suggestions, study plan) — each LLM-first with an offline fallback.
+- **Graceful degradation everywhere**: no DB → in-memory; no Redis → in-process cache; no AI keys →
+  offline bank / heuristics / templates; studio backend down → panels keep last-good state.
 
-### 🔲 Not integrated / TODO (be aware before you build on it)
-- **No real auth on the server.** `userId` is just the email or an anon id from the client — there's **no token verification**, so progress/exams aren't access-controlled. *TODO: verify Firebase ID tokens server-side.*
-- **The two design studios and the code sandbox never touch the backend.** Designs persist to **localStorage only** (`cloudDesigns`, `cloudActiveDesign`, `agentDesign`). *TODO if wanted: server-side design save/share, accounts.*
-- **No tests, no CI.**
-- Go/Java code runs on the **external Wandbox** public API (not our server), so it needs internet.
-- It's a **learning simulator** — there's no real cloud provisioning / Terraform export.
-
-To go to production you'd most likely add: server-side auth (verify Firebase tokens), persistent
-Postgres, and optionally an endpoint to store/share designs.
+### 🔲 Not integrated / TODO
+- **Design *storage* is still localStorage-only** (`cloudDesigns`, `cloudActiveDesign`, `agentDesign`) —
+  the server *computes* on a design you POST, but doesn't yet save/share it per account. *TODO if wanted.*
+- **The code sandbox never touches the backend** — code runs in the browser (Go/Java on external Wandbox).
+- **No tests / CI** — verification has been manual + scripted.
+- It's a **learning simulator** — no real cloud provisioning / Terraform export.
+- **Redis isn't set up on the dev machine** (Docker was unreliable here) — caching uses the in-process
+  fallback, which is fine for single-instance dev but doesn't survive a restart or span instances.
 
 ---
 
@@ -300,9 +346,11 @@ shell → *terminal | editor*). Used by **`Playground.jsx`** (Project Mode) and 
 
 ## 8. Cross-cutting things worth knowing
 
-- **State vs logic split.** If you're changing *behaviour/rules*, you're almost always in `src/lib/**`
-  (pure, testable, no React). If you're changing *layout/interaction*, you're in `src/pages/**` or
-  `src/components/**`. The `data/**` files are just catalogs — edit them to add blocks/lessons/templates.
+- **State vs logic split.** If you're changing *layout/interaction*, you're in `src/pages/**` or
+  `src/components/**`. If you're changing *behaviour/rules*, the pure logic lives in `src/lib/**` — but
+  note the studio engines now **run on the server**, so a rule change means editing the `src/lib/{cloud,agent}/*.js`
+  reference **and** its Go twin in `go-server/internal/studio/*` (§3). The `data/**` files are just
+  catalogs — edit them to add blocks/lessons/templates (no backend change needed).
 - **Persistence** is all `localStorage` via `src/lib/storage.js` (keys are prefixed `ground0.`):
   `cloudDesigns`/`cloudActiveDesign` (Architecture Studio), `agentDesign` (Agentic Studio),
   `cloudProgress`, `demoUser`, playground code, etc.
@@ -331,6 +379,9 @@ shell → *terminal | editor*). Used by **`Playground.jsx`** (Project Mode) and 
 | Studio **panels / inspectors** | `StudioPanels.jsx` / `AgentPanels.jsx` |
 | Studio **page wiring / state / tabs** | `pages/CloudDesigner.jsx` / `pages/AgentStudio.jsx` |
 | A **code runner** | `src/lib/runners/*` |
+| The **live studio compute** (analyze/sim/load/cost) | `go-server/internal/studio/*` (+ mirror the `src/lib/**` twin) |
+| **Auth / accounts / OAuth** (server) | `go-server/internal/auth/*` |
 | The **backend API / exams / DB** | `go-server/internal/*` |
-| **Routes / auth gate** | `src/App.jsx`, `context/AuthContext.jsx` |
+| **Studio API client** (front end) | `src/lib/studioApi.js` |
+| **Routes / protected layout / auth gate** | `src/App.jsx`, `context/AuthContext.jsx` |
 | A **lesson** (cloud or language) | `src/data/cloud/lessons/*` / `src/data/tutorials/*` |

@@ -243,7 +243,7 @@ func (h *Handler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) frontendRedirect(errMsg string) string {
-	return strings.TrimRight(h.frontendURL, "/") + "/?authError=" + url.QueryEscape(errMsg)
+	return strings.TrimRight(h.frontendURL, "/") + "/login?authError=" + url.QueryEscape(errMsg)
 }
 
 func Mount(r chi.Router, h *Handler) {
