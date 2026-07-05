@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { FlaskConical, GraduationCap, Cloud, ArrowRight, Zap, ShieldCheck, WifiOff } from 'lucide-react'
+import { BookOpenText, Flame, DraftingCompass, ArrowRight, Zap, ShieldCheck, WifiOff } from 'lucide-react'
 import { TRACKS, ACCENTS } from '../data/tracks.js'
 import Watermark3D from '../components/Watermark3D.jsx'
 
@@ -14,66 +14,74 @@ export default function Landing() {
             <Zap size={12} /> Nothing to install — runs in your browser
           </span>
           <h1 className="text-5xl leading-tight font-extrabold tracking-tight text-white sm:text-6xl">
-            Code. Run. <span className="gradient-text">Learn.</span>
+            Learn. Prove. <span className="gradient-text">Forge.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-zinc-400">
-            Ground Zer0 is a sandbox workspace for architectural design and coding.
+            <span className="font-semibold text-zinc-200">DevAshura F<span className="phi-neon">Φ</span>rge</span> — three
+            grounds, one workspace: gain knowledge like a <span className="deva-neon font-medium">Deva</span>, prove it
+            like an <span className="ashura-neon font-medium">Ashura</span>, and design in balance at Ground<span className="phi-neon font-semibold">Φ</span>.
           </p>
         </div>
 
-        {/* Mode cards */}
+        {/* The three grounds */}
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           <Link
-            to="/playground"
-            className="group panel fade-up p-6 transition-all hover:-translate-y-0.5 hover:border-indigo-500/50"
+            to="/deva"
+            className="group panel fade-up border-violet-500/20 p-6 transition-all hover:-translate-y-0.5 hover:border-violet-400/60"
             style={{ animationDelay: '0.1s' }}
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-950/50">
-              <FlaskConical size={20} className="text-white" />
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-700 shadow-lg shadow-violet-950/50">
+              <BookOpenText size={20} className="text-white" />
             </div>
-            <h2 className="text-xl font-bold text-white">Project Mode</h2>
+            <h2 className="text-xl font-bold text-white">
+              Ground <span className="deva-neon">Δeva</span>
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              A free playground. Pick a language, write whatever you want, and run it instantly — live React preview,
-              console output, or an interactive terminal.
+              The knowledge realm. Learn to code through guided, level-by-level tracks in six languages — and
+              absorb the concepts behind cloud systems and AI with animated flow boards.
             </p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-indigo-400 group-hover:gap-2 transition-all">
-              Start building <ArrowRight size={15} />
+            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-violet-400 group-hover:gap-2 transition-all">
+              Seek knowledge <ArrowRight size={15} />
             </span>
           </Link>
 
           <Link
-            to="/learn"
-            className="group panel fade-up p-6 transition-all hover:-translate-y-0.5 hover:border-cyan-500/50"
+            to="/ashura"
+            className="group panel fade-up border-rose-500/20 p-6 transition-all hover:-translate-y-0.5 hover:border-rose-400/60"
             style={{ animationDelay: '0.2s' }}
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-600 shadow-lg shadow-cyan-950/50">
-              <GraduationCap size={20} className="text-white" />
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-rose-500 to-orange-600 shadow-lg shadow-rose-950/50">
+              <Flame size={20} className="text-white" />
             </div>
-            <h2 className="text-xl font-bold text-white">Guided Mode</h2>
+            <h2 className="text-xl font-bold text-white">
+              Ground <span className="ashura-neon">Λshura</span>
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Follow-along tutorials, level by level. Each lesson explains a concept, gives you starter code, and lets
-              you run it right there — with solutions when you're stuck.
+              The proving ground. Face AI-driven mock exams that grade you and target your weakest domains —
+              or build freely in the project sandbox. Trial by fire.
             </p>
-            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-400 group-hover:gap-2 transition-all">
-              Start learning <ArrowRight size={15} />
+            <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-rose-400 group-hover:gap-2 transition-all">
+              Prove yourself <ArrowRight size={15} />
             </span>
           </Link>
 
           <Link
-            to="/cloud"
-            className="group panel fade-up p-6 transition-all hover:-translate-y-0.5 hover:border-fuchsia-500/50"
+            to="/zero"
+            className="group panel fade-up border-fuchsia-500/20 p-6 transition-all hover:-translate-y-0.5 hover:border-fuchsia-400/60"
             style={{ animationDelay: '0.3s' }}
           >
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-indigo-600 shadow-lg shadow-fuchsia-950/50">
-              <Cloud size={20} className="text-white" />
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 shadow-lg shadow-fuchsia-950/50">
+              <DraftingCompass size={20} className="text-white" />
             </div>
-            <h2 className="text-xl font-bold text-white">Ground0 : Architectural Design studio</h2>
+            <h2 className="text-xl font-bold text-white">
+              Ground<span className="phi-neon">Φ</span>
+            </h2>
             <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              Learn architectural design, LLM/agentic workflows, cloud and DevOps with interactive play/pause flow boards — then prep for AWS certs and
-              interviews with AI-driven mock exams and feedback.
+              The balance point. Design cloud architectures and LLM-agent pipelines on a live canvas — reviewed,
+              simulated, load-tested, priced, and AI-assisted as you build.
             </p>
             <span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-fuchsia-400 group-hover:gap-2 transition-all">
-              Explore the cloud <ArrowRight size={15} />
+              Enter the forge <ArrowRight size={15} />
             </span>
           </Link>
         </div>

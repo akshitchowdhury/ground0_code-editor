@@ -1,4 +1,9 @@
-# Ground Zer0 — Codebase Guide (a navigator, not a spec)
+# DevAshura FΦrge — Codebase Guide (a navigator, not a spec)
+
+> Brand note: the product is **DevAshura FΦrge (D.A.F)**, formerly *Ground Zer0*. The UI is split into
+> three "grounds": **Ground Δeva** `/deva` (learning), **Ground Λshura** `/ashura` (exams + sandbox),
+> **GroundΦ** `/zero` (design studios). Internal identifiers (storage prefix `ground0.`, the Go module,
+> API routes) intentionally keep the old name so saved data and contracts don't break.
 
 Read this first when you sit down to edit. It tells you **where things live, how they
 fit together, and where to make a given change** — so you can dive in instead of feeling lost.

@@ -141,7 +141,7 @@ export default function Login() {
         <div className="fade-up w-full max-w-sm">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-white">
-              Welcome to Ground&nbsp;Zer<span className="zero-neon">0</span>
+              Welcome to <span className="deva-neon">Δ</span>.<span className="ashura-neon">Α</span>.<span className="phi-neon">Φ</span>orge
             </h2>
             <p className="mt-1.5 text-sm leading-relaxed text-zinc-400">
               Sign in to sync progress across devices, or jump straight in as a guest — guest data stays on this

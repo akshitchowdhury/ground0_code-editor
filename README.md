@@ -1,8 +1,14 @@
-# Ground Zer0
+# DevAshura FΦrge (D.A.F)
 
 A browser-based learning workspace that mixes a real multi-language code sandbox with two visual **design studios** — one for cloud architecture, one for LLM agents — plus an AI-graded exam lab. Everything runs in the browser; a Go backend adds accounts, persistence, and the AI features on top.
 
-I started this as an MVP to have one place where I could *write code*, *design a system*, and *learn the theory behind it* without bouncing between five different tools. It grew from there.
+I started this as an MVP (then called *Ground Zer0*) to have one place where I could *write code*, *design a system*, and *learn the theory behind it* without bouncing between five different tools. It grew from there — and the structure eventually earned its own mythology. The app is split into **three grounds**:
+
+- **Ground Δeva** (`/deva`) — the knowledge realm: guided code tracks + cloud/AI concept lessons. Techno-purple.
+- **Ground Λshura** (`/ashura`) — the proving ground: AI mock exams + the free code sandbox. Techno-crimson.
+- **GroundΦ** (`/zero`) — the balance point: the two design studios, where knowledge and power meet. Purple ↔ crimson in equilibrium.
+
+> Internal identifiers (localStorage keys, the Go module path, API routes) still use the `ground0` name — renaming those would break saved user data for zero visual gain.
 
 ---
 

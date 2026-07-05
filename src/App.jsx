@@ -10,6 +10,9 @@ import CloudTopicPlayer from './pages/CloudTopicPlayer.jsx'
 import CloudDesigner from './pages/CloudDesigner.jsx'
 import AgentStudio from './pages/AgentStudio.jsx'
 import ExamLab from './pages/ExamLab.jsx'
+import GroundZero from './pages/GroundZero.jsx'
+import GroundDeva from './pages/GroundDeva.jsx'
+import GroundAshura from './pages/GroundAshura.jsx'
 import Login from './pages/Login.jsx'
 import { useAuth } from './context/AuthContext.jsx'
 
@@ -55,6 +58,10 @@ export default function App() {
       {/* Everything below requires a session (guest counts). */}
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Landing />} />
+        {/* The three grounds of DevAshura FΦrge */}
+        <Route path="/zero" element={<GroundZero />} />
+        <Route path="/deva" element={<GroundDeva />} />
+        <Route path="/ashura" element={<GroundAshura />} />
         <Route path="/playground" element={<Playground />} />
         <Route path="/learn" element={<LearnHome />} />
         <Route path="/learn/:trackId" element={<TutorialPlayer />} />

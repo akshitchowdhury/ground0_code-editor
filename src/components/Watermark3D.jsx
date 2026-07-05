@@ -1,17 +1,18 @@
 import { useEffect, useRef } from 'react'
 
-// "GROUND ZER0" — 3D floating watermark for the landing page.
+// "DEVASHURA FΦRGE" — 3D floating watermark for the landing page.
 // Three depth layers under a perspective camera give the extruded look;
-// a slow keyframe float plus mouse parallax keep it moving. The zero is
+// a slow keyframe float plus mouse parallax keep it moving. The Φ is
 // the centrepiece: neon gradient, glow, flicker and RGB glitch slices
 // (all styling lives under "Ground Zer0 watermark" in index.css).
 function WordMark({ ghost }) {
   return (
     <div className="wm-text text-center leading-none">
-      <div className="wm-line1 wm-outline">GROUND</div>
+      <div className="wm-line1 wm-outline">DEVASHURA</div>
       <div className="wm-line2">
-        <span className="wm-outline">ZER</span>
-        <span className={ghost ? 'wm-outline' : 'wm-zero'}>0</span>
+        <span className="wm-outline">F</span>
+        <span className={ghost ? 'wm-outline' : 'wm-zero'}>Φ</span>
+        <span className="wm-outline">RGE</span>
       </div>
     </div>
   )

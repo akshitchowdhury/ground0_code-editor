@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { Link, NavLink } from 'react-router-dom'
-import { Code2, GraduationCap, FlaskConical, LogOut, BrainCircuit } from 'lucide-react'
+import { Code2, LogOut, BookOpenText, Flame, DraftingCompass } from 'lucide-react'
 import { useAuth } from '../context/AuthContext.jsx'
 
-function NavItem({ to, icon: Icon, children }) {
+// activeText is a literal Tailwind class per ground (v4 — never build names
+// dynamically): violet for Deva, rose for Ashura, fuchsia for Φ.
+function NavItem({ to, icon: Icon, activeText = 'text-white', children }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
         `flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-          isActive ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-white'
+          isActive ? `bg-zinc-800 ${activeText}` : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-white'
         }`
       }
     >
@@ -30,19 +32,21 @@ export default function Navbar() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg shadow-indigo-950/50">
             <Code2 size={17} className="text-white" />
           </span>
-          <span className="font-display text-[14px] font-bold tracking-wider text-white">
-            GROUND&nbsp;ZER<span className="zero-neon">0</span>
+          <span className="font-display text-[13px] font-bold tracking-wider text-white">
+            <span className="hidden lg:inline">DEVASHURA&nbsp;</span>
+            <span className="lg:hidden">D.A.&nbsp;</span>
+            F<span className="phi-neon">Φ</span>RGE
           </span>
         </Link>
         <nav className="flex items-center gap-1">
-          <NavItem to="/playground" icon={FlaskConical}>
-            Project Mode
+          <NavItem to="/deva" icon={BookOpenText} activeText="text-violet-300">
+            Ground Δeva
           </NavItem>
-          <NavItem to="/learn" icon={GraduationCap}>
-            Guided Mode
+          <NavItem to="/ashura" icon={Flame} activeText="text-rose-300">
+            Ground Λshura
           </NavItem>
-          <NavItem to="/cloud" icon={BrainCircuit}>
-          AI + Cloud Design studio 
+          <NavItem to="/zero" icon={DraftingCompass} activeText="text-fuchsia-300">
+            GroundΦ
           </NavItem>
         </nav>
       </div>

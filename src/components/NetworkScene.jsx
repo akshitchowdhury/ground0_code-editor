@@ -137,11 +137,14 @@ export default function NetworkScene() {
         <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-cyan-500 shadow-lg shadow-indigo-950/50">
           <Code2 size={28} className="text-white" />
         </span>
-        <h1 className="relative font-display text-2xl font-extrabold tracking-[0.32em] text-white sm:text-3xl lg:text-4xl">
-          GROUND&nbsp;ZER<span className="zero-neon">0</span>
-        </h1>
+        <div className="relative">
+          <p className="font-display text-sm font-bold tracking-[0.42em] text-zinc-300 sm:text-base">DEVASHURA</p>
+          <h1 className="font-display text-3xl font-extrabold tracking-[0.18em] text-white sm:text-4xl lg:text-5xl">
+            F<span className="phi-neon">Φ</span>RGE
+          </h1>
+        </div>
         <p className="relative max-w-xs text-sm leading-relaxed text-zinc-400">
-          Your very own architectural design studio + Code sandbox.
+          Learn like a Deva. Prove like an Ashura. Design in balance.
         </p>
       </div>
     </div>
